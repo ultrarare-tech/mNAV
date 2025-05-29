@@ -134,3 +134,14 @@ type BitcoinTransaction struct {
 	ExtractedText   string    `json:"extractedText"`
 	ConfidenceScore float64   `json:"confidenceScore"`
 }
+
+// FilingParseResult represents the result of parsing a filing with enhanced parser
+type FilingParseResult struct {
+	Filing              Filing                   `json:"filing"`
+	BitcoinTransactions []BitcoinTransaction     `json:"bitcoinTransactions"`
+	SharesOutstanding   *SharesOutstandingRecord `json:"sharesOutstanding,omitempty"`
+	ParsedAt            time.Time                `json:"parsedAt"`
+	ParsingMethod       string                   `json:"parsingMethod"`
+	ProcessingTimeMs    int                      `json:"processingTimeMs"`
+	Errors              []string                 `json:"errors,omitempty"`
+}

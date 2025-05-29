@@ -20,6 +20,9 @@ EDGAR_DATA_SRC=cmd/collection/edgar-data
 BITCOIN_PARSER_BINARY=bin/interpretation/bitcoin-parser
 BITCOIN_PARSER_SRC=cmd/interpretation/bitcoin-parser
 
+GROK_TEST_BINARY=bin/interpretation/grok-test
+GROK_TEST_SRC=cmd/interpretation/grok-test
+
 # =============================================================================
 # DATA ANALYSIS TOOLS - Calculate metrics and insights
 # =============================================================================
@@ -32,12 +35,10 @@ MNAV_CALCULATOR_SRC=cmd/analysis/mnav-calculator
 EDGAR_ENHANCED_BINARY=bin/legacy/edgar-enhanced
 RAW_FILING_MANAGER_BINARY=bin/legacy/raw-filing-manager
 VALIDATE_GROK_BINARY=bin/legacy/validate-grok
-GROK_TEST_BINARY=bin/legacy/grok-test
 
 EDGAR_ENHANCED_SRC=cmd/edgar-enhanced
 RAW_FILING_MANAGER_SRC=cmd/raw-filing-manager
 VALIDATE_GROK_SRC=cmd/validate-grok
-GROK_TEST_SRC=cmd/grok-test
 
 .PHONY: all build clean test deps help
 .PHONY: collection interpretation analysis legacy
@@ -58,7 +59,7 @@ collection: $(EDGAR_DATA_BINARY)
 	@echo "✅ Collection tools built successfully"
 
 # Build all interpretation tools  
-interpretation: $(BITCOIN_PARSER_BINARY)
+interpretation: $(BITCOIN_PARSER_BINARY) $(GROK_TEST_BINARY)
 	@echo "✅ Interpretation tools built successfully"
 
 # Build all analysis tools
@@ -66,7 +67,7 @@ analysis: $(MNAV_CALCULATOR_BINARY)
 	@echo "✅ Analysis tools built successfully"
 
 # Build legacy tools (when needed)
-legacy: $(RAW_FILING_MANAGER_BINARY) $(VALIDATE_GROK_BINARY) $(GROK_TEST_BINARY)
+legacy: $(RAW_FILING_MANAGER_BINARY) $(VALIDATE_GROK_BINARY)
 	@echo "✅ Legacy tools built successfully"
 
 # =============================================================================
@@ -85,6 +86,11 @@ $(BITCOIN_PARSER_BINARY):
 	@mkdir -p bin/interpretation
 	$(GOBUILD) -o $(BITCOIN_PARSER_BINARY) ./$(BITCOIN_PARSER_SRC)
 
+$(GROK_TEST_BINARY):
+	@echo "🤖 Building Grok AI test tool..."
+	@mkdir -p bin/interpretation
+	$(GOBUILD) -o $(GROK_TEST_BINARY) ./$(GROK_TEST_SRC)
+
 # Analysis Tools
 $(MNAV_CALCULATOR_BINARY):
 	@echo "📊 Building mNAV calculator..."
@@ -102,16 +108,12 @@ $(VALIDATE_GROK_BINARY):
 	@mkdir -p bin/legacy
 	$(GOBUILD) -o $(VALIDATE_GROK_BINARY) ./$(VALIDATE_GROK_SRC)
 
-$(GROK_TEST_BINARY):
-	@echo "🔬 Building Grok test tool (legacy)..."
-	@mkdir -p bin/legacy
-	$(GOBUILD) -o $(GROK_TEST_BINARY) ./$(GROK_TEST_SRC)
-
 # =============================================================================
 # INDIVIDUAL TARGETS
 # =============================================================================
 edgar-data: $(EDGAR_DATA_BINARY)
 bitcoin-parser: $(BITCOIN_PARSER_BINARY)
+grok-test: $(GROK_TEST_BINARY)
 mnav-calculator: $(MNAV_CALCULATOR_BINARY)
 
 # =============================================================================
@@ -164,6 +166,7 @@ demo:
 	@echo ""
 	@echo "🔍 DATA INTERPRETATION:"
 	@echo "   bitcoin-parser    - Extracts Bitcoin transactions"
+	@echo "   grok-test         - Tests Grok AI integration"
 	@echo ""
 	@echo "📊 DATA ANALYSIS:"
 	@echo "   mnav-calculator   - Calculates mNAV metrics"
@@ -187,6 +190,7 @@ help:
 	@echo "🔧 INDIVIDUAL TOOLS:"
 	@echo "  edgar-data       - SEC filing collector"
 	@echo "  bitcoin-parser   - Bitcoin transaction extractor"
+	@echo "  grok-test        - Grok AI integration tester"
 	@echo "  mnav-calculator  - mNAV metrics calculator"
 	@echo ""
 	@echo "🛠️  UTILITY TARGETS:"

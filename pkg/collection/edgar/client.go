@@ -120,7 +120,7 @@ type TickersMap map[string]TickerData
 func (c *Client) GetCIKByTicker(ticker string) (string, error) {
 	// Hard-coded fallback for MSTR in case the API call fails
 	if ticker == "MSTR" {
-		return "1050446", nil
+		return "0001050446", nil
 	}
 
 	// Retrieve the company tickers mapping from SEC
@@ -148,7 +148,7 @@ func (c *Client) GetCIKByTicker(ticker string) (string, error) {
 	return "", fmt.Errorf("CIK not found for ticker: %s", ticker)
 }
 
-// GetCompanyFilings returns recent filings for a given ticker symbol (simplified implementation)
+// GetCompanyFilings returns recent filings for a given ticker symbol using the official SEC EDGAR API
 func (c *Client) GetCompanyFilings(ticker string, filingTypes []string, startDate, endDate string) ([]models.Filing, error) {
 	// Get CIK for the ticker
 	cik, err := c.GetCIKByTicker(ticker)
@@ -156,9 +156,140 @@ func (c *Client) GetCompanyFilings(ticker string, filingTypes []string, startDat
 		return nil, fmt.Errorf("error getting CIK for ticker %s: %w", ticker, err)
 	}
 
-	// For now, return empty slice - full implementation would go here
-	fmt.Printf("GetCompanyFilings not yet fully implemented for %s (CIK: %s)\n", ticker, cik)
-	return []models.Filing{}, nil
+	// Build the submissions URL using the official SEC API
+	submissionsURL := fmt.Sprintf("https://data.sec.gov/submissions/CIK%s.json", cik)
+
+	// Fetch submissions data
+	resp, err := c.Get(submissionsURL)
+	if err != nil {
+		return nil, fmt.Errorf("error fetching submissions for CIK %s: %w", cik, err)
+	}
+	defer resp.Body.Close()
+
+	// Parse the submissions response
+	var submissionsData SubmissionsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&submissionsData); err != nil {
+		return nil, fmt.Errorf("error parsing submissions response: %w", err)
+	}
+
+	// Parse date filters
+	var startTime, endTime time.Time
+	if startDate != "" {
+		startTime, err = time.Parse("2006-01-02", startDate)
+		if err != nil {
+			return nil, fmt.Errorf("invalid start date format: %w", err)
+		}
+	}
+	if endDate != "" {
+		endTime, err = time.Parse("2006-01-02", endDate)
+		if err != nil {
+			return nil, fmt.Errorf("invalid end date format: %w", err)
+		}
+		// Set end time to end of day
+		endTime = endTime.Add(23*time.Hour + 59*time.Minute + 59*time.Second)
+	}
+
+	// Convert filing types to a map for quick lookup
+	filingTypeMap := make(map[string]bool)
+	for _, ft := range filingTypes {
+		filingTypeMap[strings.ToUpper(strings.TrimSpace(ft))] = true
+	}
+
+	// Process the filings from the recent submissions
+	var filings []models.Filing
+	recent := submissionsData.Filings.Recent
+
+	// Iterate through all recent filings
+	for i := 0; i < len(recent.AccessionNumber); i++ {
+		// Check if this filing type is requested
+		formType := recent.Form[i]
+		if len(filingTypeMap) > 0 && !filingTypeMap[strings.ToUpper(formType)] {
+			continue
+		}
+
+		// Parse filing date
+		filingDate, err := time.Parse("2006-01-02", recent.FilingDate[i])
+		if err != nil {
+			continue // Skip invalid dates
+		}
+
+		// Check date range
+		if !startTime.IsZero() && filingDate.Before(startTime) {
+			continue
+		}
+		if !endTime.IsZero() && filingDate.After(endTime) {
+			continue
+		}
+
+		// Parse report date (may be empty)
+		var reportDate time.Time
+		if recent.ReportDate[i] != "" {
+			reportDate, _ = time.Parse("2006-01-02", recent.ReportDate[i])
+		}
+
+		// Build document URL
+		accessionNumber := recent.AccessionNumber[i]
+		primaryDocument := recent.PrimaryDocument[i]
+
+		// Format accession number for URL (remove dashes)
+		accessionForURL := strings.ReplaceAll(accessionNumber, "-", "")
+
+		// Build the document URL
+		documentURL := fmt.Sprintf("https://www.sec.gov/Archives/edgar/data/%s/%s/%s",
+			strings.TrimLeft(cik, "0"), // Remove leading zeros for URL
+			accessionForURL,
+			primaryDocument)
+
+		// Build the filing detail URL
+		filingURL := fmt.Sprintf("https://www.sec.gov/Archives/edgar/data/%s/%s-index.htm",
+			strings.TrimLeft(cik, "0"), // Remove leading zeros for URL
+			accessionForURL)
+
+		filing := models.Filing{
+			AccessionNumber: accessionNumber,
+			FilingType:      formType,
+			FilingDate:      filingDate,
+			ReportDate:      reportDate,
+			URL:             filingURL,
+			DocumentURL:     documentURL,
+		}
+
+		filings = append(filings, filing)
+	}
+
+	// Sort filings by date (newest first)
+	sort.Slice(filings, func(i, j int) bool {
+		return filings[i].FilingDate.After(filings[j].FilingDate)
+	})
+
+	return filings, nil
+}
+
+// SubmissionsResponse represents the response from the SEC submissions API
+type SubmissionsResponse struct {
+	CIK        string   `json:"cik"`
+	EntityType string   `json:"entityType"`
+	Name       string   `json:"name"`
+	Tickers    []string `json:"tickers"`
+	Exchanges  []string `json:"exchanges"`
+	Filings    struct {
+		Recent struct {
+			AccessionNumber []string `json:"accessionNumber"`
+			FilingDate      []string `json:"filingDate"`
+			ReportDate      []string `json:"reportDate"`
+			Form            []string `json:"form"`
+			FileNumber      []string `json:"fileNumber"`
+			Items           []string `json:"items"`
+			Size            []int    `json:"size"`
+			PrimaryDocument []string `json:"primaryDocument"`
+		} `json:"recent"`
+		Files []struct {
+			Name        string `json:"name"`
+			FilingCount int    `json:"filingCount"`
+			FilingFrom  string `json:"filingFrom"`
+			FilingTo    string `json:"filingTo"`
+		} `json:"files"`
+	} `json:"filings"`
 }
 
 // FetchDocumentContent fetches the content of a filing document
@@ -233,6 +364,60 @@ func GetDownloadedFilings(ticker, baseDir string) ([]string, error) {
 
 	// Sort by filename (which contains the date)
 	sort.Strings(filings)
+
+	return filings, nil
+}
+
+// ListDownloadedFilings returns information about all downloaded filings for a ticker
+func (c *Client) ListDownloadedFilings(ticker, baseDir string) ([]models.Filing, error) {
+	// Get file paths
+	filePaths, err := GetDownloadedFilings(ticker, baseDir)
+	if err != nil {
+		return nil, err
+	}
+
+	var filings []models.Filing
+	for _, filePath := range filePaths {
+		// Parse filename to extract filing information
+		filename := filepath.Base(filePath)
+
+		// Expected format: YYYY-MM-DD_FORM-TYPE_ACCESSION-NUMBER.htm
+		parts := strings.Split(filename, "_")
+		if len(parts) < 3 {
+			continue // Skip files that don't match expected format
+		}
+
+		// Parse date
+		filingDate, err := time.Parse("2006-01-02", parts[0])
+		if err != nil {
+			continue // Skip files with invalid dates
+		}
+
+		// Extract form type and accession number
+		formType := parts[1]
+		accessionWithExt := parts[2]
+		accessionNumber := strings.TrimSuffix(accessionWithExt, ".htm")
+
+		// Get file info
+		_, err = os.Stat(filePath)
+		if err != nil {
+			continue
+		}
+
+		filing := models.Filing{
+			AccessionNumber: accessionNumber,
+			FilingType:      formType,
+			FilingDate:      filingDate,
+			DocumentURL:     filePath, // Use local file path
+		}
+
+		filings = append(filings, filing)
+	}
+
+	// Sort by date (newest first)
+	sort.Slice(filings, func(i, j int) bool {
+		return filings[i].FilingDate.After(filings[j].FilingDate)
+	})
 
 	return filings, nil
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -21,6 +22,7 @@ func main() {
 		endDate     = flag.String("end", time.Now().Format("2006-01-02"), "End date (YYYY-MM-DD)")
 		dataDir     = flag.String("data-dir", "data/edgar/companies", "Data directory")
 		dryRun      = flag.Bool("dry-run", false, "Show what would be collected without actually downloading")
+		listLocal   = flag.Bool("list", false, "List already downloaded filings")
 		verbose     = flag.Bool("verbose", false, "Verbose output")
 	)
 
@@ -52,6 +54,27 @@ func main() {
 	// Initialize EDGAR client
 	userAgent := "mNAV Application - Jeffrey Kibler (jeffreykibler@protonmail.com)"
 	client := edgarclient.NewClient(userAgent)
+
+	// Handle list command
+	if *listLocal {
+		companyDir := filepath.Join(*dataDir, *ticker)
+		filings, err := client.ListDownloadedFilings(*ticker, *dataDir)
+		if err != nil {
+			log.Fatalf("Error listing downloaded filings: %v", err)
+		}
+
+		if len(filings) == 0 {
+			fmt.Printf("❌ No downloaded filings found for %s in %s\n", *ticker, companyDir)
+			return
+		}
+
+		fmt.Printf("📁 Downloaded filings for %s (%d total):\n\n", *ticker, len(filings))
+		for i, filing := range filings {
+			fmt.Printf("%d. %s - %s (%s)\n", i+1, filing.FilingType, filing.FilingDate.Format("2006-01-02"), filing.AccessionNumber)
+		}
+		fmt.Printf("\n📁 Files stored in: %s/\n", companyDir)
+		return
+	}
 
 	// Look up CIK if not provided
 	if *cik == "" {
@@ -101,35 +124,41 @@ func main() {
 		return
 	}
 
-	// Create data directory
-	if err := os.MkdirAll(*dataDir, 0755); err != nil {
-		log.Fatalf("Error creating data directory: %v", err)
-	}
-
 	// Download filings
 	fmt.Printf("⬇️  Downloading %d filings...\n", len(filings))
 
 	successCount := 0
 	errorCount := 0
 
+	// Create company-specific directory
+	companyDir := filepath.Join(*dataDir, *ticker)
+	if err := os.MkdirAll(companyDir, 0755); err != nil {
+		log.Fatalf("Error creating company directory: %v", err)
+	}
+
 	for i, filing := range filings {
 		fmt.Printf("[%d/%d] Downloading %s (%s)... ",
 			i+1, len(filings), filing.AccessionNumber, filing.FilingType)
 
-		// Download the document content
-		content, err := client.FetchDocumentContent(filing.DocumentURL)
+		// Use the DownloadFilingContent method to save to disk
+		filePath, err := client.DownloadFilingContent(filing, companyDir)
 		if err != nil {
 			fmt.Printf("❌ Error: %v\n", err)
 			errorCount++
 			continue
 		}
 
-		// For now, just report the successful download
-		// In the future, this would save to proper storage
-		fmt.Printf("✅ Downloaded (%d KB)\n", len(content)/1024)
+		// Get file size for reporting
+		fileInfo, err := os.Stat(filePath)
+		var sizeKB int64
+		if err == nil {
+			sizeKB = fileInfo.Size() / 1024
+		}
+
+		fmt.Printf("✅ Saved to %s (%d KB)\n", filepath.Base(filePath), sizeKB)
 		successCount++
 
-		// Rate limiting
+		// Rate limiting - be respectful to SEC servers
 		time.Sleep(100 * time.Millisecond)
 	}
 
@@ -138,7 +167,7 @@ func main() {
 	if errorCount > 0 {
 		fmt.Printf("   ❌ Errors: %d filings\n", errorCount)
 	}
-	fmt.Printf("   📁 Data stored in: %s/%s/raw_filings/\n", *dataDir, *ticker)
+	fmt.Printf("   📁 Data stored in: %s/\n", companyDir)
 	fmt.Printf("\n💡 Next steps:\n")
 	fmt.Printf("   • Run interpretation commands to extract data from filings\n")
 	fmt.Printf("   • Run analysis commands to calculate metrics\n")
