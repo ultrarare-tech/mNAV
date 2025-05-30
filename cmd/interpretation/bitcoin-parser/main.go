@@ -3,12 +3,14 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/jeffreykibler/mNAV/pkg/interpretation/grok"
 	"github.com/jeffreykibler/mNAV/pkg/interpretation/parser"
 	"github.com/jeffreykibler/mNAV/pkg/shared/models"
 )
@@ -27,8 +29,8 @@ func main() {
 
 	flag.Parse()
 
-	fmt.Printf("🔍 DATA INTERPRETATION - Bitcoin Transaction Parser\\n")
-	fmt.Printf("==================================================\\n\\n")
+	fmt.Printf("🔍 DATA INTERPRETATION - Bitcoin Transaction Parser\n")
+	fmt.Printf("==================================================\n\n")
 
 	if *ticker == "" {
 		fmt.Println("❌ Error: ticker is required")
@@ -36,17 +38,25 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Initialize Grok client if requested
+	var grokClient *grok.Client
+	if *useGrok {
+		grokClient = grok.NewClient()
+		if !grokClient.IsConfigured() {
+			fmt.Println("⚠️  Warning: Grok API key not configured, falling back to regex-only mode")
+			grokClient = nil
+		}
+	}
+
 	// Initialize enhanced parser
-	enhancedParser := parser.NewEnhancedParser(*useGrok, *verbose)
+	enhancedParser := parser.NewEnhancedParser(grokClient, *verbose)
 
 	// Show parser configuration
-	stats := enhancedParser.GetStats()
-	fmt.Printf("📊 Parser Configuration:\\n")
-	fmt.Printf("   • Parser Type: %v\\n", stats["parser_type"])
-	fmt.Printf("   • Grok Enabled: %v\\n", stats["grok_enabled"])
-	fmt.Printf("   • Grok Configured: %v\\n", stats["grok_configured"])
-	fmt.Printf("   • Verbose Mode: %v\\n", stats["verbose"])
-	fmt.Printf("\\n")
+	fmt.Printf("📊 Parser Configuration:\n")
+	fmt.Printf("   • Grok Enabled: %v\n", *useGrok)
+	fmt.Printf("   • Grok Configured: %v\n", grokClient != nil && grokClient.IsConfigured())
+	fmt.Printf("   • Verbose Mode: %v\n", *verbose)
+	fmt.Printf("\n")
 
 	// Find filing files
 	companyDir := filepath.Join(*dataDir, *ticker)
@@ -72,23 +82,23 @@ func main() {
 			}
 		}
 		files = filteredFiles
-		fmt.Printf("🔍 Filtered to %d files matching filing type: %s\\n", len(files), *filingType)
+		fmt.Printf("🔍 Filtered to %d files matching filing type: %s\n", len(files), *filingType)
 	}
 
 	// Limit files if maxFiles is specified
 	if *maxFiles > 0 && len(files) > *maxFiles {
 		files = files[:*maxFiles]
-		fmt.Printf("📊 Limited to %d files (max-files setting)\\n", len(files))
+		fmt.Printf("📊 Limited to %d files (max-files setting)\n", len(files))
 	}
 
-	fmt.Printf("📁 Found %d filing files to process\\n\\n", len(files))
+	fmt.Printf("📁 Found %d filing files to process\n\n", len(files))
 
 	if *dryRun {
-		fmt.Printf("🔍 DRY RUN - Files that would be processed:\\n")
+		fmt.Printf("🔍 DRY RUN - Files that would be processed:\n")
 		for i, file := range files {
-			fmt.Printf("[%d] %s\\n", i+1, filepath.Base(file))
+			fmt.Printf("[%d] %s\n", i+1, filepath.Base(file))
 		}
-		fmt.Printf("\\n✅ Dry run complete. Use without -dry-run to actually process files.\\n")
+		fmt.Printf("\n✅ Dry run complete. Use without -dry-run to actually process files.\n")
 		return
 	}
 
@@ -115,17 +125,25 @@ func main() {
 		// Read file content
 		content, err := os.Open(filePath)
 		if err != nil {
-			fmt.Printf("❌ Error reading file: %v\\n", err)
+			fmt.Printf("❌ Error reading file: %v\n", err)
+			errorFiles++
+			continue
+		}
+
+		// Read content as string
+		contentBytes, err := io.ReadAll(content)
+		content.Close()
+		if err != nil {
+			fmt.Printf("❌ Error reading file content: %v\n", err)
 			errorFiles++
 			continue
 		}
 
 		// Parse the filing
-		result, err := enhancedParser.ParseFiling(content, filing)
-		content.Close()
+		result, err := enhancedParser.ParseFiling(string(contentBytes), filing.FilingType)
 
 		if err != nil {
-			fmt.Printf("❌ Error parsing: %v\\n", err)
+			fmt.Printf("❌ Error parsing: %v\n", err)
 			errorFiles++
 			continue
 		}
@@ -143,29 +161,29 @@ func main() {
 
 		// Show results
 		if btcCount > 0 || sharesCount > 0 {
-			fmt.Printf("✅ Found %d BTC transactions, %d shares record (%dms)\\n",
+			fmt.Printf("✅ Found %d BTC transactions, %d shares record (%dms)\n",
 				btcCount, sharesCount, result.ProcessingTimeMs)
 
 			if *verbose {
 				for _, tx := range result.BitcoinTransactions {
-					fmt.Printf("   💰 BTC: %.2f BTC for $%.2f (avg: $%.2f)\\n",
+					fmt.Printf("   💰 BTC: %.2f BTC for $%.2f (avg: $%.2f)\n",
 						tx.BTCPurchased, tx.USDSpent, tx.AvgPriceUSD)
 				}
 				if result.SharesOutstanding != nil {
-					fmt.Printf("   📊 Shares: %.0f common shares\\n", result.SharesOutstanding.CommonShares)
+					fmt.Printf("   📊 Shares: %.0f common shares\n", result.SharesOutstanding.CommonShares)
 				}
 			}
 		} else {
-			fmt.Printf("⚪ No data found (%dms)\\n", result.ProcessingTimeMs)
+			fmt.Printf("⚪ No data found (%dms)\n", result.ProcessingTimeMs)
 		}
 
 		// Save results if any data was found
 		if btcCount > 0 || sharesCount > 0 {
 			outputFile := filepath.Join(*outputDir, strings.Replace(fileName, ".htm", "_parsed.json", 1))
 			if err := saveParseResult(result, outputFile); err != nil {
-				fmt.Printf("   ⚠️  Warning: Could not save results: %v\\n", err)
+				fmt.Printf("   ⚠️  Warning: Could not save results: %v\n", err)
 			} else if *verbose {
-				fmt.Printf("   💾 Saved to: %s\\n", outputFile)
+				fmt.Printf("   💾 Saved to: %s\n", outputFile)
 			}
 		}
 	}
@@ -173,22 +191,22 @@ func main() {
 	totalTime := time.Since(startTime)
 
 	// Summary
-	fmt.Printf("\\n📊 PARSING SUMMARY\\n")
-	fmt.Printf("==================\\n")
-	fmt.Printf("Files Processed: %d/%d\\n", processedFiles, len(files))
-	fmt.Printf("Files with Errors: %d\\n", errorFiles)
-	fmt.Printf("Total BTC Transactions: %d\\n", totalTransactions)
-	fmt.Printf("Total Shares Records: %d\\n", totalSharesRecords)
-	fmt.Printf("Processing Time: %v\\n", totalTime)
-	fmt.Printf("Average Time per File: %v\\n", totalTime/time.Duration(len(files)))
+	fmt.Printf("\n📊 PARSING SUMMARY\n")
+	fmt.Printf("==================\n")
+	fmt.Printf("Files Processed: %d/%d\n", processedFiles, len(files))
+	fmt.Printf("Files with Errors: %d\n", errorFiles)
+	fmt.Printf("Total BTC Transactions: %d\n", totalTransactions)
+	fmt.Printf("Total Shares Records: %d\n", totalSharesRecords)
+	fmt.Printf("Processing Time: %v\n", totalTime)
+	fmt.Printf("Average Time per File: %v\n", totalTime/time.Duration(len(files)))
 
-	if *useGrok && stats["grok_configured"].(bool) {
-		fmt.Printf("\\n🤖 Grok AI was available for enhanced parsing\\n")
+	if *useGrok && grokClient != nil && grokClient.IsConfigured() {
+		fmt.Printf("\n🤖 Grok AI was available for enhanced parsing\n")
 	} else if *useGrok {
-		fmt.Printf("\\n⚠️  Grok AI was requested but not configured (missing GROK_API_KEY)\\n")
+		fmt.Printf("\n⚠️  Grok AI was requested but not configured (missing GROK_API_KEY)\n")
 	}
 
-	fmt.Printf("\\n✅ Bitcoin transaction parsing complete!\\n")
+	fmt.Printf("\n✅ Bitcoin transaction parsing complete!\n")
 }
 
 // parseFilingFromFilename extracts filing metadata from filename
@@ -231,14 +249,14 @@ func saveParseResult(result *models.FilingParseResult, outputFile string) error 
 	defer file.Close()
 
 	// Write a simple summary
-	fmt.Fprintf(file, "Filing: %s\\n", result.Filing.AccessionNumber)
-	fmt.Fprintf(file, "Parsed at: %s\\n", result.ParsedAt.Format(time.RFC3339))
-	fmt.Fprintf(file, "Method: %s\\n", result.ParsingMethod)
-	fmt.Fprintf(file, "BTC Transactions: %d\\n", len(result.BitcoinTransactions))
+	fmt.Fprintf(file, "Filing: %s\n", result.Filing.AccessionNumber)
+	fmt.Fprintf(file, "Parsed at: %s\n", result.ParsedAt.Format(time.RFC3339))
+	fmt.Fprintf(file, "Method: %s\n", result.ParsingMethod)
+	fmt.Fprintf(file, "BTC Transactions: %d\n", len(result.BitcoinTransactions))
 	if result.SharesOutstanding != nil {
-		fmt.Fprintf(file, "Shares Outstanding: %.0f\\n", result.SharesOutstanding.CommonShares)
+		fmt.Fprintf(file, "Shares Outstanding: %.0f\n", result.SharesOutstanding.CommonShares)
 	}
-	fmt.Fprintf(file, "Processing Time: %dms\\n", result.ProcessingTimeMs)
+	fmt.Fprintf(file, "Processing Time: %dms\n", result.ProcessingTimeMs)
 
 	return nil
 }

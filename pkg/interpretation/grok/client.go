@@ -137,8 +137,16 @@ func (c *Client) ExtractBitcoinTransactions(text string, filing models.Filing) (
 		return nil, fmt.Errorf("Grok API key not configured")
 	}
 
-	// Create the prompt for Bitcoin transaction extraction
-	prompt := c.createBitcoinExtractionPrompt(text, filing)
+	// Pre-filter content to only Bitcoin-relevant paragraphs to reduce token usage
+	filteredText := c.filterBitcoinRelevantContent(text)
+
+	// If no Bitcoin-relevant content found, return empty results
+	if filteredText == "" {
+		return []models.BitcoinTransaction{}, nil
+	}
+
+	// Create the prompt for Bitcoin transaction extraction using filtered content
+	prompt := c.createBitcoinExtractionPrompt(filteredText, filing)
 
 	// Make the API request
 	response, err := c.makeRequest(context.Background(), prompt)
@@ -164,8 +172,16 @@ func (c *Client) ExtractSharesOutstanding(text string, filing models.Filing) (*m
 		return nil, fmt.Errorf("Grok API key not configured")
 	}
 
-	// Create the prompt for shares extraction
-	prompt := c.createSharesExtractionPrompt(text, filing)
+	// Pre-filter content to only shares-relevant sections to reduce token usage
+	filteredText := c.filterSharesRelevantContent(text)
+
+	// If no shares-relevant content found, return nil
+	if filteredText == "" {
+		return nil, nil
+	}
+
+	// Create the prompt for shares extraction using filtered content
+	prompt := c.createSharesExtractionPrompt(filteredText, filing)
 
 	// Make the API request
 	response, err := c.makeRequest(context.Background(), prompt)
@@ -489,4 +505,221 @@ func (c *Client) convertSharesToStandardFormat(extraction *SharesExtractionResul
 	}
 
 	return record
+}
+
+// filterBitcoinRelevantContent extracts only paragraphs that contain Bitcoin-related keywords
+func (c *Client) filterBitcoinRelevantContent(text string) string {
+	// Bitcoin-related keywords to look for
+	bitcoinKeywords := []string{
+		"bitcoin", "btc", "cryptocurrency", "crypto", "digital asset", "digital currency",
+		"blockchain", "satoshi", "mining", "wallet", "private key", "public key",
+	}
+
+	// Split text into paragraphs (by double newlines or single newlines)
+	paragraphs := strings.Split(text, "\n")
+
+	var relevantParagraphs []string
+	var currentParagraph strings.Builder
+
+	for _, line := range paragraphs {
+		line = strings.TrimSpace(line)
+
+		// If empty line, check if current paragraph is relevant
+		if line == "" {
+			if currentParagraph.Len() > 0 {
+				paragraph := currentParagraph.String()
+				if c.containsBitcoinKeywords(paragraph, bitcoinKeywords) && len(paragraph) > 50 {
+					relevantParagraphs = append(relevantParagraphs, paragraph)
+				}
+				currentParagraph.Reset()
+			}
+			continue
+		}
+
+		// Add line to current paragraph
+		if currentParagraph.Len() > 0 {
+			currentParagraph.WriteString(" ")
+		}
+		currentParagraph.WriteString(line)
+	}
+
+	// Check final paragraph
+	if currentParagraph.Len() > 0 {
+		paragraph := currentParagraph.String()
+		if c.containsBitcoinKeywords(paragraph, bitcoinKeywords) && len(paragraph) > 50 {
+			relevantParagraphs = append(relevantParagraphs, paragraph)
+		}
+	}
+
+	// Also look for table rows or list items that might contain Bitcoin info
+	tableRows := c.extractBitcoinTableContent(text, bitcoinKeywords)
+	relevantParagraphs = append(relevantParagraphs, tableRows...)
+
+	// Join relevant paragraphs with clear separators
+	if len(relevantParagraphs) == 0 {
+		return ""
+	}
+
+	return strings.Join(relevantParagraphs, "\n\n---\n\n")
+}
+
+// filterSharesRelevantContent extracts only sections that contain shares outstanding information
+func (c *Client) filterSharesRelevantContent(text string) string {
+	// Shares-related keywords and section headers
+	sharesKeywords := []string{
+		"shares outstanding", "common stock", "preferred stock", "stockholders", "equity",
+		"balance sheet", "consolidated balance", "capital stock", "share count",
+		"weighted average", "basic shares", "diluted shares", "treasury shares",
+	}
+
+	sectionHeaders := []string{
+		"balance sheet", "consolidated balance sheet", "stockholders equity", "shareholders equity",
+		"capital stock", "common stock", "preferred stock", "cover page", "equity section",
+		"notes to", "note ", "financial statements", "consolidated statements",
+	}
+
+	// Split text into paragraphs
+	paragraphs := strings.Split(text, "\n")
+
+	var relevantParagraphs []string
+	var currentParagraph strings.Builder
+	inRelevantSection := false
+
+	for _, line := range paragraphs {
+		line = strings.TrimSpace(line)
+
+		// Check if this line is a section header
+		lowerLine := strings.ToLower(line)
+		for _, header := range sectionHeaders {
+			if strings.Contains(lowerLine, header) {
+				inRelevantSection = true
+				break
+			}
+		}
+
+		// If empty line, check if current paragraph is relevant
+		if line == "" {
+			if currentParagraph.Len() > 0 {
+				paragraph := currentParagraph.String()
+				if (inRelevantSection || c.containsBitcoinKeywords(paragraph, sharesKeywords)) && len(paragraph) > 30 {
+					relevantParagraphs = append(relevantParagraphs, paragraph)
+				}
+				currentParagraph.Reset()
+			}
+			inRelevantSection = false // Reset section flag on paragraph break
+			continue
+		}
+
+		// Add line to current paragraph
+		if currentParagraph.Len() > 0 {
+			currentParagraph.WriteString(" ")
+		}
+		currentParagraph.WriteString(line)
+	}
+
+	// Check final paragraph
+	if currentParagraph.Len() > 0 {
+		paragraph := currentParagraph.String()
+		if (inRelevantSection || c.containsBitcoinKeywords(paragraph, sharesKeywords)) && len(paragraph) > 30 {
+			relevantParagraphs = append(relevantParagraphs, paragraph)
+		}
+	}
+
+	// Also extract table content that might contain shares data
+	tableRows := c.extractSharesTableContent(text, sharesKeywords)
+	relevantParagraphs = append(relevantParagraphs, tableRows...)
+
+	// Join relevant paragraphs
+	if len(relevantParagraphs) == 0 {
+		return ""
+	}
+
+	return strings.Join(relevantParagraphs, "\n\n---\n\n")
+}
+
+// containsBitcoinKeywords checks if text contains any of the specified keywords
+func (c *Client) containsBitcoinKeywords(text string, keywords []string) bool {
+	lowerText := strings.ToLower(text)
+	for _, keyword := range keywords {
+		if strings.Contains(lowerText, keyword) {
+			return true
+		}
+	}
+	return false
+}
+
+// extractBitcoinTableContent looks for table rows or structured data containing Bitcoin keywords
+func (c *Client) extractBitcoinTableContent(text string, keywords []string) []string {
+	var tableContent []string
+
+	// Look for HTML table rows
+	if strings.Contains(text, "<tr>") || strings.Contains(text, "<td>") {
+		lines := strings.Split(text, "\n")
+		for _, line := range lines {
+			if (strings.Contains(line, "<tr>") || strings.Contains(line, "<td>")) &&
+				c.containsBitcoinKeywords(line, keywords) {
+				// Clean up HTML tags for better readability
+				cleaned := strings.ReplaceAll(line, "<tr>", "")
+				cleaned = strings.ReplaceAll(cleaned, "</tr>", "")
+				cleaned = strings.ReplaceAll(cleaned, "<td>", " | ")
+				cleaned = strings.ReplaceAll(cleaned, "</td>", "")
+				cleaned = strings.TrimSpace(cleaned)
+				if len(cleaned) > 20 {
+					tableContent = append(tableContent, cleaned)
+				}
+			}
+		}
+	}
+
+	// Look for structured data patterns (like financial statements)
+	lines := strings.Split(text, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		// Look for lines with numbers and Bitcoin keywords
+		if c.containsBitcoinKeywords(line, keywords) &&
+			(strings.Contains(line, "$") || strings.Contains(line, "million") || strings.Contains(line, "billion")) &&
+			len(line) > 30 && len(line) < 500 {
+			tableContent = append(tableContent, line)
+		}
+	}
+
+	return tableContent
+}
+
+// extractSharesTableContent looks for table rows or structured data containing shares information
+func (c *Client) extractSharesTableContent(text string, keywords []string) []string {
+	var tableContent []string
+
+	// Look for HTML table rows
+	if strings.Contains(text, "<tr>") || strings.Contains(text, "<td>") {
+		lines := strings.Split(text, "\n")
+		for _, line := range lines {
+			if (strings.Contains(line, "<tr>") || strings.Contains(line, "<td>")) &&
+				c.containsBitcoinKeywords(line, keywords) {
+				// Clean up HTML tags
+				cleaned := strings.ReplaceAll(line, "<tr>", "")
+				cleaned = strings.ReplaceAll(cleaned, "</tr>", "")
+				cleaned = strings.ReplaceAll(cleaned, "<td>", " | ")
+				cleaned = strings.ReplaceAll(cleaned, "</td>", "")
+				cleaned = strings.TrimSpace(cleaned)
+				if len(cleaned) > 15 {
+					tableContent = append(tableContent, cleaned)
+				}
+			}
+		}
+	}
+
+	// Look for balance sheet or financial statement lines
+	lines := strings.Split(text, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		// Look for lines with share counts
+		if c.containsBitcoinKeywords(line, keywords) &&
+			(strings.Contains(line, ",") || strings.Contains(line, "shares")) &&
+			len(line) > 20 && len(line) < 300 {
+			tableContent = append(tableContent, line)
+		}
+	}
+
+	return tableContent
 }

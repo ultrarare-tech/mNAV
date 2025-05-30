@@ -178,8 +178,30 @@ demo:
 
 # Help target
 help:
-	@echo "mNAV Project - Organized Build System"
-	@echo "===================================="
+	@echo "📋 Available commands:"
+	@echo ""
+	@echo "🏗️  Build Commands:"
+	@echo "   make build-all          - Build all tools"
+	@echo "   make collection-tools   - Build collection tools"
+	@echo "   make interpretation-tools - Build interpretation tools"
+	@echo "   make analysis-tools     - Build analysis tools"
+	@echo ""
+	@echo "📊 Collection Tools:"
+	@echo "   make edgar-scraper      - Build EDGAR filing scraper"
+	@echo "   make stock-prices       - Build stock price collector"
+	@echo "   make bitcoin-price      - Build Bitcoin price collector"
+	@echo ""
+	@echo "🔍 Interpretation Tools:"
+	@echo "   make bitcoin-parser     - Build Bitcoin transaction parser"
+	@echo "   make grok-test          - Build Grok AI test tool"
+	@echo ""
+	@echo "📈 Analysis Tools:"
+	@echo "   make data-summary       - Build data summary tool"
+	@echo "   make comprehensive-analysis - Build comprehensive analysis tool"
+	@echo ""
+	@echo "🧹 Utility Commands:"
+	@echo "   make clean              - Clean build artifacts"
+	@echo "   make test               - Run tests"
 	@echo ""
 	@echo "📂 CATEGORY TARGETS:"
 	@echo "  collection       - Build data collection tools"
@@ -204,4 +226,31 @@ help:
 	@echo "🚀 WORKFLOWS:"
 	@echo "  workflow-mstr    - Complete MSTR analysis demo"
 	@echo "  demo             - Show tool organization"
-	@echo "  help             - Show this help" 
+	@echo "  help             - Show this help"
+
+# Analysis tools
+data-summary:
+	@echo "Building data summary tool..."
+	@go build -o bin/data-summary cmd/analysis/data-summary/main.go
+
+saylor-tracker-comparison:
+	@echo "Building SaylorTracker comparison tool..."
+	@go build -o bin/saylor-tracker-comparison cmd/analysis/saylor-tracker-comparison/main.go
+
+transaction-audit:
+	@echo "Building transaction audit tool..."
+	@go build -o bin/transaction-audit cmd/analysis/transaction-audit/main.go
+
+source-links:
+	@echo "Building source links tool..."
+	@go build -o bin/source-links cmd/analysis/source-links/main.go
+
+filing-comparison:
+	@echo "Building filing comparison tool..."
+	@go build -o bin/filing-comparison cmd/analysis/filing-comparison/main.go
+
+comprehensive-analysis:
+	@echo "🔨 Building comprehensive analysis tool..."
+	@go build -o cmd/analysis/comprehensive-analysis/comprehensive-analysis cmd/analysis/comprehensive-analysis/main.go
+
+analysis-tools: data-summary comprehensive-analysis 
