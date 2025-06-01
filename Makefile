@@ -253,4 +253,25 @@ comprehensive-analysis:
 	@echo "🔨 Building comprehensive analysis tool..."
 	@go build -o cmd/analysis/comprehensive-analysis/comprehensive-analysis cmd/analysis/comprehensive-analysis/main.go
 
-analysis-tools: data-summary comprehensive-analysis 
+analysis-tools: data-summary comprehensive-analysis mnav-historical mnav-chart
+	@echo "✅ All analysis tools built"
+
+# Build specific tools
+bitcoin-historical:
+	@echo "🔨 Building bitcoin-historical..."
+	@go build -o bin/bitcoin-historical cmd/collection/bitcoin-historical/main.go
+
+mnav-historical:
+	@echo "🔨 Building mnav-historical..."
+	@go build -o bin/mnav-historical cmd/analysis/mnav-historical/main.go
+
+mnav-chart:
+	@echo "🔨 Building mnav-chart..."
+	@go build -o bin/mnav-chart cmd/analysis/mnav-chart/main.go
+
+stock-data:
+	@echo "🔨 Building stock-data..."
+	@go build -o bin/stock-data cmd/collection/stock-data/main.go
+
+# Build all targets
+all: ticker-update edgar-scraper mnav btc-price shares-extractor transaction-extractor enhanced-btc-extractor collection-runner interpretation-runner comprehensive-analyzer validate-grok grok-btc-extractor bitcoin-historical mnav-historical mnav-chart stock-data 

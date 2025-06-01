@@ -211,22 +211,37 @@ FILING CONTEXT:
 - Company: Public company filing with SEC
 - Accession Number: %s
 
-CRITICAL INSTRUCTIONS:
-1. Identify ONLY completed Bitcoin transactions (purchases, sales, or transfers)
-2. EXCLUDE financing activities (bond offerings, loan proceeds, convertible notes, ATM offerings)
-3. EXCLUDE future intentions or plans ("intends to invest", "will use proceeds", "may purchase")
-4. EXCLUDE general holdings statements unless they mention specific new transactions
-5. EXCLUDE impairment charges or accounting adjustments
-6. Look for specific amounts, dates, and transaction details
+CRITICAL CLASSIFICATION RULES:
 
-For each transaction found, extract:
-- BTC amount (number of bitcoins purchased/sold)
-- USD amount (total cost/proceeds in dollars)
-- Price per BTC (if mentioned or calculable)
-- Transaction type (purchase/sale/transfer)
-- Confidence level (0.0-1.0 based on clarity of information)
-- Brief reasoning for extraction
-- Exact source text from the filing
+1. INDIVIDUAL TRANSACTIONS (EXTRACT THESE):
+   - Announced on a SPECIFIC DATE with direct purchase language
+   - Pattern: "On [specific date], [company] purchased/acquired [amount] bitcoins"
+   - Examples:
+     * "On August 11, 2020, MicroStrategy... has purchased 21,454 bitcoins"
+     * "On December 4, 2020, MicroStrategy... had purchased approximately 2,574 bitcoins"
+     * "On January 22, 2021, MicroStrategy... purchased approximately 314 bitcoins"
+   - Key indicators: "On [date]", "announced that it had purchased", "announced that it purchased"
+
+2. CUMULATIVE TOTALS (DO NOT EXTRACT):
+   - Covers a DATE RANGE or PERIOD between two dates
+   - Pattern: "during [period/quarter/time range between date1 and date2], purchased [amount] bitcoins"
+   - Examples:
+     * "during the period between July 1, 2021 and August 23, 2021, purchased 3,907 bitcoins"
+     * "during the period between November 29, 2021 and December 8, 2021, purchased 1,434 bitcoins"
+     * "During the period between November 1, 2022 and December 21, 2022, acquired 2,395 bitcoins"
+   - Key indicators: "during the period between", "the period between X and Y", "during the quarter"
+
+3. ADDITIONAL EXCLUSIONS:
+   - Holdings updates ("As of [date], the Company holds X bitcoins")
+   - Financing activities (bond offerings, loan proceeds, convertible notes)
+   - Future intentions ("intends to invest", "will use proceeds", "may purchase")
+   - Impairment charges or accounting adjustments
+
+EXTRACTION RULES:
+- ONLY extract transactions that follow the "On [specific date]" pattern
+- IGNORE any transaction that mentions a date range or period
+- For valid transactions, extract: BTC amount, USD amount, price per BTC, specific date
+- Set confidence based on clarity of information (0.9 for clear individual transactions)
 
 FILING TEXT:
 %s
@@ -241,16 +256,16 @@ Please respond with a JSON object in this exact format:
       "transaction_type": "purchase|sale|transfer",
       "date": "YYYY-MM-DD",
       "confidence": 0.0,
-      "reasoning": "Brief explanation of why this is a valid transaction",
+      "reasoning": "Brief explanation of why this is a valid INDIVIDUAL transaction (not cumulative)",
       "source_text": "Exact relevant excerpt from filing"
     }
   ],
-  "analysis": "Overall analysis of Bitcoin-related content in the filing",
+  "analysis": "Overall analysis of Bitcoin-related content, noting any cumulative totals that were excluded",
   "confidence": 0.0,
-  "reasoning": "Overall reasoning for the extraction results"
+  "reasoning": "Overall reasoning for the extraction results, explaining individual vs cumulative classification"
 }
 
-If no Bitcoin transactions are found, return an empty transactions array but still provide analysis.`,
+If no INDIVIDUAL Bitcoin transactions are found (only cumulative totals), return an empty transactions array but still provide analysis explaining what cumulative data was found and excluded.`,
 		filing.FilingType,
 		filing.FilingDate.Format("2006-01-02"),
 		filing.AccessionNumber,

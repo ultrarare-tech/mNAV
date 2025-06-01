@@ -3,6 +3,7 @@ package parser
 import (
 	"fmt"
 	"log"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -35,20 +36,20 @@ type BitcoinParagraph struct {
 }
 
 // ParseFiling processes a filing using the two-stage approach
-func (p *EnhancedParser) ParseFiling(content, filingType string) (*models.FilingParseResult, error) {
+func (p *EnhancedParser) ParseFiling(content, filingType string, filingPath string) (*models.FilingParseResult, error) {
 	if p.verbose {
 		log.Printf("Starting two-stage parsing for %s filing (%d chars)", filingType, len(content))
 	}
 
-	// Create a basic filing object for the result
-	filing := models.Filing{
-		FilingType: filingType,
-	}
+	// Parse filing metadata from the file path
+	filing := p.parseFilingMetadata(filingPath, filingType)
 
 	result := &models.FilingParseResult{
 		Filing:   filing,
 		ParsedAt: time.Now(),
 	}
+
+	startTime := time.Now()
 
 	// Stage 1: Use regex to identify Bitcoin-related paragraphs with numerical values
 	bitcoinParagraphs := p.extractBitcoinParagraphs(content)
@@ -57,36 +58,83 @@ func (p *EnhancedParser) ParseFiling(content, filingType string) (*models.Filing
 		log.Printf("Stage 1: Found %d Bitcoin-related paragraphs with numerical values", len(bitcoinParagraphs))
 	}
 
+	var parsingMethod string
+
 	if len(bitcoinParagraphs) == 0 {
 		if p.verbose {
 			log.Printf("No Bitcoin-related paragraphs found, skipping Grok analysis")
 		}
-		return result, nil
-	}
-
-	// Stage 2: Send identified paragraphs to Grok for interpretation
-	transactions, err := p.interpretParagraphsWithGrok(bitcoinParagraphs, filing)
-	if err != nil {
-		if p.verbose {
-			log.Printf("Grok interpretation failed: %v", err)
+		parsingMethod = "Enhanced Parser (No Bitcoin content found)"
+	} else {
+		// Stage 2: Send identified paragraphs to Grok for interpretation
+		transactions, err := p.interpretParagraphsWithGrok(bitcoinParagraphs, filing)
+		if err != nil {
+			if p.verbose {
+				log.Printf("Grok interpretation failed: %v", err)
+			}
+			// Fall back to regex-only parsing
+			transactions = p.fallbackRegexParsing(bitcoinParagraphs, filing)
+			parsingMethod = "Enhanced Parser (Regex fallback - Grok failed)"
+		} else {
+			parsingMethod = "Enhanced Parser (Grok AI + Regex)"
 		}
-		// Fall back to regex-only parsing
-		transactions = p.fallbackRegexParsing(bitcoinParagraphs)
+
+		// Populate filing metadata in transactions
+		for i := range transactions {
+			transactions[i].FilingType = filing.FilingType
+			transactions[i].FilingURL = filing.URL
+		}
+
+		result.BitcoinTransactions = transactions
 	}
 
-	result.BitcoinTransactions = transactions
-	result.SharesOutstanding = p.extractSharesFromParagraphs(bitcoinParagraphs)
+	// Extract shares information
+	result.SharesOutstanding = p.extractSharesFromParagraphs(bitcoinParagraphs, filing)
+
+	// Set processing metadata
+	result.ProcessingTimeMs = int(time.Since(startTime).Milliseconds())
+	result.ParsingMethod = parsingMethod
 
 	if p.verbose {
 		sharesCount := 0
 		if result.SharesOutstanding != nil {
 			sharesCount = 1
 		}
-		log.Printf("Parsing complete: found %d transactions, %d shares entries",
-			len(result.BitcoinTransactions), sharesCount)
+		log.Printf("Parsing complete: found %d transactions, %d shares entries (method: %s)",
+			len(result.BitcoinTransactions), sharesCount, parsingMethod)
 	}
 
 	return result, nil
+}
+
+// parseFilingMetadata extracts filing metadata from the file path
+func (p *EnhancedParser) parseFilingMetadata(filePath, filingType string) models.Filing {
+	fileName := filepath.Base(filePath)
+
+	// Expected format: YYYY-MM-DD_FORM-TYPE_ACCESSION-NUMBER.htm
+	parts := strings.Split(strings.TrimSuffix(fileName, ".htm"), "_")
+
+	filing := models.Filing{
+		FilingType:  filingType,
+		DocumentURL: filePath,
+	}
+
+	if len(parts) >= 3 {
+		// Parse date
+		if date, err := time.Parse("2006-01-02", parts[0]); err == nil {
+			filing.FilingDate = date
+			filing.ReportDate = date
+		}
+
+		// Parse accession number
+		filing.AccessionNumber = parts[2]
+
+		// Construct SEC URL
+		filing.URL = fmt.Sprintf("https://www.sec.gov/Archives/edgar/data/1050446/%s/%s",
+			strings.ReplaceAll(parts[2], "-", ""), fileName)
+	}
+
+	return filing
 }
 
 // extractBitcoinParagraphs identifies paragraphs that mention Bitcoin with numerical values
@@ -115,6 +163,34 @@ func (p *EnhancedParser) extractBitcoinParagraphs(content string) []BitcoinParag
 	// Transaction-related keywords that suggest purchases, sales, or holdings
 	transactionKeywords := regexp.MustCompile(`(?i)\b(purchase|purchased|buy|bought|acquire|acquired|acquisition|sell|sold|sale|hold|holding|holdings|invest|investment|treasury|reserve|asset)\b`)
 
+	// Date range patterns that indicate cumulative totals (should be excluded)
+	// Updated based on SaylorTracker validation analysis
+	dateRangePatterns := []*regexp.Regexp{
+		// "During the period between X and Y" patterns (most common in MSTR filings)
+		regexp.MustCompile(`(?i)\bduring\s+the\s+period\s+between\s+[^,]+\s+and\s+[^,]+\b`),
+		// "Since X through Y" patterns
+		regexp.MustCompile(`(?i)\bsince\s+[^,]+\s+through\s+[^,]+\b`),
+		// "From X to Y" patterns
+		regexp.MustCompile(`(?i)\bfrom\s+[^,]+\s+to\s+[^,]+\b`),
+		// "Between X and Y" patterns (when not preceded by "period")
+		regexp.MustCompile(`(?i)\bbetween\s+[^,]+\s+and\s+[^,]+\b`),
+		// "During the quarter" patterns
+		regexp.MustCompile(`(?i)\bduring\s+the\s+(quarter|year|month)\b`),
+		// "For the three months" patterns
+		regexp.MustCompile(`(?i)\bfor\s+the\s+(three|six|nine|twelve)\s+months?\b`),
+		// "In the quarter ended" patterns
+		regexp.MustCompile(`(?i)\bin\s+the\s+quarter\s+ended\b`),
+		// "Over the period" patterns
+		regexp.MustCompile(`(?i)\bover\s+the\s+(period|quarter|year)\b`),
+		// "For the period" patterns
+		regexp.MustCompile(`(?i)\bfor\s+the\s+period\b`),
+		// "Throughout the" patterns
+		regexp.MustCompile(`(?i)\bthroughout\s+the\s+(period|quarter|year|month)\b`),
+	}
+
+	// Cumulative keywords that suggest totals rather than individual transactions
+	cumulativeKeywords := regexp.MustCompile(`(?i)\b(total|aggregate|cumulative|combined|overall|sum|collectively)\b`)
+
 	for i, paragraph := range paragraphs {
 		paragraph = strings.TrimSpace(paragraph)
 		if len(paragraph) < 50 { // Skip very short paragraphs
@@ -140,14 +216,31 @@ func (p *EnhancedParser) extractBitcoinParagraphs(content string) []BitcoinParag
 
 		// Determine context based on surrounding keywords
 		context := "unknown"
-		if transactionKeywords.MatchString(paragraph) {
+
+		// Check for date ranges first (these indicate cumulative totals)
+		hasDateRange := false
+		for _, pattern := range dateRangePatterns {
+			if pattern.MatchString(paragraph) {
+				hasDateRange = true
+				break
+			}
+		}
+
+		if hasDateRange {
+			context = "cumulative_range"
+		} else if transactionKeywords.MatchString(paragraph) {
 			context = "transaction"
 		}
 
 		// Additional context clues
-		if regexp.MustCompile(`(?i)\b(total|aggregate|cumulative)\b`).MatchString(paragraph) {
-			context = "cumulative"
+		if cumulativeKeywords.MatchString(paragraph) {
+			if context == "transaction" {
+				context = "cumulative_total"
+			} else if context == "unknown" {
+				context = "cumulative"
+			}
 		}
+
 		if regexp.MustCompile(`(?i)\b(per\s+share|average|price)\b`).MatchString(paragraph) {
 			context = "pricing"
 		}
@@ -160,8 +253,7 @@ func (p *EnhancedParser) extractBitcoinParagraphs(content string) []BitcoinParag
 		})
 
 		if p.verbose {
-			log.Printf("Found Bitcoin paragraph %d: %d numbers, context: %s", i, len(numbers), context)
-			log.Printf("Preview: %.100s...", paragraph)
+			log.Printf("Found Bitcoin paragraph %d (context: %s): %.100s...", i, context, paragraph)
 		}
 	}
 
@@ -212,7 +304,7 @@ func (p *EnhancedParser) interpretParagraphsWithGrok(paragraphs []BitcoinParagra
 }
 
 // fallbackRegexParsing provides basic regex parsing when Grok is unavailable
-func (p *EnhancedParser) fallbackRegexParsing(paragraphs []BitcoinParagraph) []models.BitcoinTransaction {
+func (p *EnhancedParser) fallbackRegexParsing(paragraphs []BitcoinParagraph, filing models.Filing) []models.BitcoinTransaction {
 	var transactions []models.BitcoinTransaction
 
 	// Basic regex patterns for transaction extraction
@@ -221,11 +313,39 @@ func (p *EnhancedParser) fallbackRegexParsing(paragraphs []BitcoinParagraph) []m
 	datePattern := regexp.MustCompile(`(?:january|february|march|april|may|june|july|august|september|october|november|december|\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}-\d{2}-\d{2})`)
 
 	for _, para := range paragraphs {
-		// Skip paragraphs that seem to describe cumulative totals
-		if strings.Contains(strings.ToLower(para.Text), "total") ||
-			strings.Contains(strings.ToLower(para.Text), "aggregate") ||
-			strings.Contains(strings.ToLower(para.Text), "cumulative") {
+		// Skip paragraphs that have been classified as cumulative totals or date ranges
+		if para.Context == "cumulative_range" || para.Context == "cumulative_total" || para.Context == "cumulative" {
+			if p.verbose {
+				log.Printf("Skipping cumulative paragraph: %s", para.Context)
+			}
 			continue
+		}
+
+		// Additional checks for cumulative language based on SaylorTracker analysis
+		lowerText := strings.ToLower(para.Text)
+		if strings.Contains(lowerText, "during the period between") ||
+			strings.Contains(lowerText, "the period between") ||
+			strings.Contains(lowerText, "during the quarter") ||
+			strings.Contains(lowerText, "for the quarter") ||
+			strings.Contains(lowerText, "for the period") {
+			if p.verbose {
+				log.Printf("Skipping paragraph with cumulative language: during/period patterns")
+			}
+			continue
+		}
+
+		// However, allow "On [date]" patterns even if they contain some cumulative keywords
+		if !strings.Contains(lowerText, "on ") || !regexp.MustCompile(`(?i)\bon\s+\w+\s+\d+,?\s+\d{4}`).MatchString(para.Text) {
+			// Only apply additional cumulative checks if it's not an "On [date]" pattern
+			if strings.Contains(lowerText, "aggregate") ||
+				strings.Contains(lowerText, "cumulative") ||
+				strings.Contains(lowerText, "since") && strings.Contains(lowerText, "through") ||
+				strings.Contains(lowerText, "from") && strings.Contains(lowerText, "to") {
+				if p.verbose {
+					log.Printf("Skipping paragraph with cumulative language: aggregate/cumulative terms")
+				}
+				continue
+			}
 		}
 
 		// Look for purchase patterns
@@ -275,6 +395,8 @@ func (p *EnhancedParser) fallbackRegexParsing(paragraphs []BitcoinParagraph) []m
 
 		transaction := models.BitcoinTransaction{
 			Date:            transactionDate,
+			FilingType:      filing.FilingType,
+			FilingURL:       filing.URL,
 			BTCPurchased:    btcAmount,
 			USDSpent:        usdAmount,
 			AvgPriceUSD:     avgPrice,
@@ -293,7 +415,7 @@ func (p *EnhancedParser) fallbackRegexParsing(paragraphs []BitcoinParagraph) []m
 }
 
 // extractSharesFromParagraphs looks for shares outstanding information in the paragraphs
-func (p *EnhancedParser) extractSharesFromParagraphs(paragraphs []BitcoinParagraph) *models.SharesOutstandingRecord {
+func (p *EnhancedParser) extractSharesFromParagraphs(paragraphs []BitcoinParagraph, filing models.Filing) *models.SharesOutstandingRecord {
 	sharesPattern := regexp.MustCompile(`(?i)(\d+(?:,\d{3})*(?:\.\d+)?)\s+(?:million\s+)?(?:shares?\s+)?(?:outstanding|issued|common\s+stock)`)
 
 	for _, para := range paragraphs {
@@ -316,6 +438,9 @@ func (p *EnhancedParser) extractSharesFromParagraphs(paragraphs []BitcoinParagra
 
 			record := &models.SharesOutstandingRecord{
 				Date:            time.Now(), // Would need better date extraction
+				FilingType:      filing.FilingType,
+				FilingURL:       filing.URL,
+				AccessionNumber: filing.AccessionNumber,
 				CommonShares:    sharesCount,
 				TotalShares:     sharesCount,
 				ExtractedText:   para.Text,

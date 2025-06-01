@@ -5,15 +5,20 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"sort"
+	"time"
 )
 
 // SaylorTrackerData represents the data from SaylorTracker website
 type SaylorTrackerData struct {
-	TotalBTC         float64 `json:"total_btc"`
-	TotalUSDInvested float64 `json:"total_usd_invested"`
-	AverageCostBasis float64 `json:"average_cost_basis"`
-	LastUpdated      string  `json:"last_updated"`
+	TotalBTC          float64 `json:"totalBtc"`
+	TotalUSD          float64 `json:"totalUsd"`
+	AveragePrice      float64 `json:"averagePrice"`
+	CurrentBTCPrice   float64 `json:"currentBtcPrice"`
+	CurrentValue      float64 `json:"currentValue"`
+	SharesOutstanding float64 `json:"sharesOutstanding"`
+	StockPrice        float64 `json:"stockPrice"`
+	MarketCap         float64 `json:"marketCap"`
+	NAVPremium        float64 `json:"navPremium"`
 }
 
 // Our transaction structure
@@ -26,157 +31,199 @@ type Transaction struct {
 	Source     string  `json:"source"`
 }
 
-type OurData struct {
-	Summary struct {
-		TotalTransactions  int     `json:"total_transactions"`
-		TotalBTCAcquired   float64 `json:"total_btc_acquired"`
-		TotalUSDInvested   float64 `json:"total_usd_invested"`
-		AverageCostBasis   float64 `json:"average_cost_basis"`
-		FirstPurchaseDate  string  `json:"first_purchase_date"`
-		LatestPurchaseDate string  `json:"latest_purchase_date"`
-	} `json:"summary"`
-	Transactions []Transaction `json:"transactions"`
+type OurAnalysis struct {
+	TotalBTC          float64 `json:"totalBtc"`
+	TotalUSD          float64 `json:"totalUsd"`
+	AveragePrice      float64 `json:"averagePrice"`
+	TotalTransactions int     `json:"totalTransactions"`
+	FirstTransaction  string  `json:"firstTransaction"`
+	LastTransaction   string  `json:"lastTransaction"`
+}
+
+type ComparisonResult struct {
+	GeneratedAt   time.Time         `json:"generatedAt"`
+	SaylorTracker SaylorTrackerData `json:"saylorTracker"`
+	OurExtraction OurAnalysis       `json:"ourExtraction"`
+	Discrepancies Discrepancies     `json:"discrepancies"`
+	Analysis      string            `json:"analysis"`
+}
+
+type Discrepancies struct {
+	BTCDifference          float64 `json:"btcDifference"`
+	BTCDifferencePercent   float64 `json:"btcDifferencePercent"`
+	USDDifference          float64 `json:"usdDifference"`
+	USDDifferencePercent   float64 `json:"usdDifferencePercent"`
+	PriceDifference        float64 `json:"priceDifference"`
+	PriceDifferencePercent float64 `json:"priceDifferencePercent"`
 }
 
 func main() {
-	// SaylorTracker data as of the website (May 26, 2025)
+	fmt.Printf("🔍 SAYLOR TRACKER COMPARISON ANALYSIS\n")
+	fmt.Printf("=====================================\n\n")
+
+	// SaylorTracker.com data (as of the search results)
 	saylorData := SaylorTrackerData{
-		TotalBTC:         580250,
-		TotalUSDInvested: 40610000000, // ~$40.61 billion
-		AverageCostBasis: 69979,       // ~$69,979 per bitcoin
-		LastUpdated:      "2025-05-26",
+		TotalBTC:          580250,
+		TotalUSD:          40610000000,  // $40.61 billion
+		AveragePrice:      69979,        // $69,979 per BTC
+		CurrentBTCPrice:   106153.57,    // $106,153.57
+		CurrentValue:      61658538201,  // $61.66 billion
+		SharesOutstanding: 256990000,    // 256.99M shares
+		StockPrice:        370.63,       // $370.63
+		MarketCap:         101330000000, // $101.33B
+		NAVPremium:        1.64,         // 1.64x
 	}
 
-	// Load our data
-	file, err := os.Open("data/analysis/mstr_bitcoin_transactions.json")
+	// Load our analysis
+	ourData, err := loadOurAnalysis("data/analysis/MSTR_comprehensive_bitcoin_analysis.json")
 	if err != nil {
-		log.Fatalf("Error opening our data file: %v", err)
-	}
-	defer file.Close()
-
-	var ourData OurData
-	if err := json.NewDecoder(file).Decode(&ourData); err != nil {
-		log.Fatalf("Error decoding our data: %v", err)
+		log.Fatalf("❌ Error loading our analysis: %v", err)
 	}
 
-	fmt.Println("=== MSTR Bitcoin Holdings Comparison ===")
-	fmt.Println()
+	// Calculate discrepancies
+	discrepancies := calculateDiscrepancies(saylorData, ourData)
 
-	fmt.Println("📊 SUMMARY COMPARISON:")
-	fmt.Printf("SaylorTracker Total BTC:    %.0f BTC\n", saylorData.TotalBTC)
-	fmt.Printf("Our Analysis Total BTC:     %.0f BTC\n", ourData.Summary.TotalBTCAcquired)
-	btcDiff := ourData.Summary.TotalBTCAcquired - saylorData.TotalBTC
-	fmt.Printf("Difference:                 %+.0f BTC (%.2f%%)\n", btcDiff, (btcDiff/saylorData.TotalBTC)*100)
-	fmt.Println()
+	// Create comparison result
+	comparison := ComparisonResult{
+		GeneratedAt:   time.Now(),
+		SaylorTracker: saylorData,
+		OurExtraction: ourData,
+		Discrepancies: discrepancies,
+		Analysis:      generateAnalysis(discrepancies),
+	}
 
-	fmt.Printf("SaylorTracker Total USD:    $%.0f billion\n", saylorData.TotalUSDInvested/1000000000)
-	fmt.Printf("Our Analysis Total USD:     $%.1f billion\n", ourData.Summary.TotalUSDInvested/1000000000)
-	usdDiff := ourData.Summary.TotalUSDInvested - saylorData.TotalUSDInvested
-	fmt.Printf("Difference:                 $%+.1f billion (%.2f%%)\n", usdDiff/1000000000, (usdDiff/saylorData.TotalUSDInvested)*100)
-	fmt.Println()
+	// Display results
+	displayComparison(comparison)
 
-	fmt.Printf("SaylorTracker Avg Cost:     $%.2f\n", saylorData.AverageCostBasis)
-	fmt.Printf("Our Analysis Avg Cost:      $%.2f\n", ourData.Summary.AverageCostBasis)
-	costDiff := ourData.Summary.AverageCostBasis - saylorData.AverageCostBasis
-	fmt.Printf("Difference:                 $%+.2f (%.2f%%)\n", costDiff, (costDiff/saylorData.AverageCostBasis)*100)
-	fmt.Println()
-
-	fmt.Println("📅 DATE RANGE COMPARISON:")
-	fmt.Printf("SaylorTracker Last Update:  %s\n", saylorData.LastUpdated)
-	fmt.Printf("Our Latest Transaction:     %s\n", ourData.Summary.LatestPurchaseDate)
-	fmt.Printf("Our First Transaction:      %s\n", ourData.Summary.FirstPurchaseDate)
-	fmt.Printf("Our Total Transactions:     %d\n", ourData.Summary.TotalTransactions)
-	fmt.Println()
-
-	// Analyze potential causes of discrepancy
-	fmt.Println("🔍 POTENTIAL CAUSES OF DISCREPANCY:")
-	fmt.Println()
-
-	if btcDiff > 0 {
-		fmt.Printf("1. OVER-COUNTING: We have %.0f MORE BTC than SaylorTracker\n", btcDiff)
-		fmt.Println("   Possible causes:")
-		fmt.Println("   - Double-counting transactions from multiple filings")
-		fmt.Println("   - Including cumulative totals instead of incremental purchases")
-		fmt.Println("   - Parsing errors creating phantom transactions")
-		fmt.Println("   - Including non-purchase transactions (transfers, etc.)")
+	// Save comparison
+	if err := saveComparison(comparison, "data/analysis/saylor_tracker_comparison.json"); err != nil {
+		log.Printf("⚠️  Warning: Could not save comparison: %v", err)
 	} else {
-		fmt.Printf("1. UNDER-COUNTING: We have %.0f FEWER BTC than SaylorTracker\n", -btcDiff)
-		fmt.Println("   Possible causes:")
-		fmt.Println("   - Missing recent transactions not yet in SEC filings")
-		fmt.Println("   - Failed to parse some transactions from filings")
-		fmt.Println("   - SaylorTracker includes data from Twitter/press releases")
+		fmt.Printf("\n💾 Comparison saved to: data/analysis/saylor_tracker_comparison.json\n")
 	}
-	fmt.Println()
+}
 
-	// Analyze transaction sources
-	grokCount := 0
-	regexCount := 0
-	for _, tx := range ourData.Transactions {
-		if tx.Source == "Grok AI" {
-			grokCount++
-		} else {
-			regexCount++
-		}
+func loadOurAnalysis(filePath string) (OurAnalysis, error) {
+	var analysis struct {
+		Summary struct {
+			TotalBTC         float64 `json:"totalBtc"`
+			TotalUSD         float64 `json:"totalUsd"`
+			AveragePrice     float64 `json:"averagePrice"`
+			FirstTransaction string  `json:"firstTransaction"`
+			LastTransaction  string  `json:"lastTransaction"`
+		} `json:"summary"`
+		TotalTransactions int `json:"totalTransactions"`
 	}
 
-	fmt.Println("2. DATA SOURCE ANALYSIS:")
-	fmt.Printf("   - Grok AI extracted:     %d transactions\n", grokCount)
-	fmt.Printf("   - Regex extracted:       %d transactions\n", regexCount)
-	fmt.Printf("   - Total transactions:    %d\n", len(ourData.Transactions))
-	fmt.Println("   - SaylorTracker uses: Twitter + SEC filings + press releases")
-	fmt.Println("   - We only use: SEC filings")
-	fmt.Println()
-
-	// Check for suspicious transactions
-	fmt.Println("3. SUSPICIOUS TRANSACTIONS (potential parsing errors):")
-	suspiciousCount := 0
-	for _, tx := range ourData.Transactions {
-		if tx.AvgPrice < 1000 || tx.AvgPrice > 150000 {
-			fmt.Printf("   - %s: %.0f BTC at $%.0f (filing: %s)\n",
-				tx.Date, tx.BTCAmount, tx.AvgPrice, tx.FilingType)
-			suspiciousCount++
-		}
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return OurAnalysis{}, err
 	}
-	if suspiciousCount == 0 {
-		fmt.Println("   - No obviously suspicious price data found")
+
+	if err := json.Unmarshal(data, &analysis); err != nil {
+		return OurAnalysis{}, err
 	}
-	fmt.Println()
 
-	// Recent transactions analysis
-	fmt.Println("4. RECENT TRANSACTIONS (May 2025):")
-	recentBTC := 0.0
-	recentUSD := 0.0
-	for _, tx := range ourData.Transactions {
-		if tx.Date >= "2025-05-01" {
-			recentBTC += tx.BTCAmount
-			recentUSD += tx.USDAmount
-			fmt.Printf("   - %s: %.0f BTC for $%.0f M\n",
-				tx.Date, tx.BTCAmount, tx.USDAmount/1000000)
-		}
+	return OurAnalysis{
+		TotalBTC:          analysis.Summary.TotalBTC,
+		TotalUSD:          analysis.Summary.TotalUSD,
+		AveragePrice:      analysis.Summary.AveragePrice,
+		TotalTransactions: analysis.TotalTransactions,
+		FirstTransaction:  analysis.Summary.FirstTransaction,
+		LastTransaction:   analysis.Summary.LastTransaction,
+	}, nil
+}
+
+func calculateDiscrepancies(saylor SaylorTrackerData, our OurAnalysis) Discrepancies {
+	btcDiff := our.TotalBTC - saylor.TotalBTC
+	btcDiffPercent := (btcDiff / saylor.TotalBTC) * 100
+
+	usdDiff := our.TotalUSD - saylor.TotalUSD
+	usdDiffPercent := (usdDiff / saylor.TotalUSD) * 100
+
+	priceDiff := our.AveragePrice - saylor.AveragePrice
+	priceDiffPercent := (priceDiff / saylor.AveragePrice) * 100
+
+	return Discrepancies{
+		BTCDifference:          btcDiff,
+		BTCDifferencePercent:   btcDiffPercent,
+		USDDifference:          usdDiff,
+		USDDifferencePercent:   usdDiffPercent,
+		PriceDifference:        priceDiff,
+		PriceDifferencePercent: priceDiffPercent,
 	}
-	fmt.Printf("   Total May 2025: %.0f BTC for $%.0f M\n", recentBTC, recentUSD/1000000)
-	fmt.Println()
+}
 
-	// Recommendations
-	fmt.Println("💡 RECOMMENDATIONS:")
-	fmt.Println("1. Cross-reference with Michael Saylor's Twitter announcements")
-	fmt.Println("2. Check for duplicate transactions across different filing types")
-	fmt.Println("3. Verify cumulative vs incremental reporting in filings")
-	fmt.Println("4. Compare individual transaction dates and amounts with SaylorTracker")
-	fmt.Println("5. Consider that SaylorTracker may have more recent data from Twitter")
-	fmt.Println()
+func generateAnalysis(disc Discrepancies) string {
+	analysis := "DISCREPANCY ANALYSIS:\n\n"
 
-	// Generate detailed transaction comparison
-	fmt.Println("📋 TRANSACTION TIMELINE (Last 10 transactions):")
-	sort.Slice(ourData.Transactions, func(i, j int) bool {
-		return ourData.Transactions[i].Date > ourData.Transactions[j].Date
-	})
-
-	for i, tx := range ourData.Transactions {
-		if i >= 10 {
-			break
-		}
-		fmt.Printf("%s: %8.0f BTC @ $%6.0f = $%8.0f M (%s)\n",
-			tx.Date, tx.BTCAmount, tx.AvgPrice, tx.USDAmount/1000000, tx.Source)
+	if disc.BTCDifferencePercent > 10 {
+		analysis += "🚨 SIGNIFICANT BTC DISCREPANCY: Our extraction shows significantly more BTC than SaylorTracker. "
+		analysis += "This suggests potential over-counting, possibly due to:\n"
+		analysis += "- Cumulative totals being misinterpreted as individual purchases\n"
+		analysis += "- 10-K annual reports containing summary data rather than new transactions\n"
+		analysis += "- Duplicate transactions across different filing types\n\n"
+	} else if disc.BTCDifferencePercent > 5 {
+		analysis += "⚠️  MODERATE BTC DISCREPANCY: Some over-counting detected. Review needed.\n\n"
+	} else {
+		analysis += "✅ BTC COUNTS ALIGN: Good agreement between sources.\n\n"
 	}
+
+	if disc.USDDifferencePercent > 10 {
+		analysis += "💰 SIGNIFICANT USD DISCREPANCY: Investment amounts differ substantially.\n\n"
+	}
+
+	if disc.PriceDifferencePercent > 10 {
+		analysis += "📊 AVERAGE PRICE DISCREPANCY: Different calculation methods or data sources.\n\n"
+	}
+
+	analysis += "RECOMMENDATIONS:\n"
+	analysis += "1. Review 10-K filings for cumulative vs. individual transaction data\n"
+	analysis += "2. Cross-reference with Michael Saylor's Twitter announcements\n"
+	analysis += "3. Implement duplicate detection across filing types\n"
+	analysis += "4. Validate against on-chain Bitcoin wallet data if available"
+
+	return analysis
+}
+
+func displayComparison(comp ComparisonResult) {
+	fmt.Printf("📊 COMPARISON RESULTS\n")
+	fmt.Printf("====================\n\n")
+
+	fmt.Printf("🌐 SAYLOR TRACKER DATA (saylortracker.com):\n")
+	fmt.Printf("   Total BTC: %.0f BTC\n", comp.SaylorTracker.TotalBTC)
+	fmt.Printf("   Total Invested: $%.2f billion\n", comp.SaylorTracker.TotalUSD/1e9)
+	fmt.Printf("   Average Price: $%.2f per BTC\n", comp.SaylorTracker.AveragePrice)
+	fmt.Printf("   Current BTC Price: $%.2f\n", comp.SaylorTracker.CurrentBTCPrice)
+	fmt.Printf("   Current Portfolio Value: $%.2f billion\n", comp.SaylorTracker.CurrentValue/1e9)
+	fmt.Printf("   Stock Price: $%.2f\n", comp.SaylorTracker.StockPrice)
+	fmt.Printf("   Market Cap: $%.2f billion\n", comp.SaylorTracker.MarketCap/1e9)
+	fmt.Printf("   NAV Premium: %.2fx\n", comp.SaylorTracker.NAVPremium)
+
+	fmt.Printf("\n🔍 OUR EXTRACTION DATA:\n")
+	fmt.Printf("   Total BTC: %.0f BTC\n", comp.OurExtraction.TotalBTC)
+	fmt.Printf("   Total Invested: $%.2f billion\n", comp.OurExtraction.TotalUSD/1e9)
+	fmt.Printf("   Average Price: $%.2f per BTC\n", comp.OurExtraction.AveragePrice)
+	fmt.Printf("   Total Transactions: %d\n", comp.OurExtraction.TotalTransactions)
+	fmt.Printf("   First Transaction: %s\n", comp.OurExtraction.FirstTransaction)
+	fmt.Printf("   Last Transaction: %s\n", comp.OurExtraction.LastTransaction)
+
+	fmt.Printf("\n⚖️  DISCREPANCIES:\n")
+	fmt.Printf("   BTC Difference: %+.0f BTC (%+.1f%%)\n",
+		comp.Discrepancies.BTCDifference, comp.Discrepancies.BTCDifferencePercent)
+	fmt.Printf("   USD Difference: %+$.2f billion (%+.1f%%)\n",
+		comp.Discrepancies.USDDifference/1e9, comp.Discrepancies.USDDifferencePercent)
+	fmt.Printf("   Price Difference: %+$.2f per BTC (%+.1f%%)\n",
+		comp.Discrepancies.PriceDifference, comp.Discrepancies.PriceDifferencePercent)
+
+	fmt.Printf("\n📋 ANALYSIS:\n")
+	fmt.Printf("%s\n", comp.Analysis)
+}
+
+func saveComparison(comp ComparisonResult, filePath string) error {
+	data, err := json.MarshalIndent(comp, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filePath, data, 0644)
 }

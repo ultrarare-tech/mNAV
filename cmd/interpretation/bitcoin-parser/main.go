@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -140,7 +141,7 @@ func main() {
 		}
 
 		// Parse the filing
-		result, err := enhancedParser.ParseFiling(string(contentBytes), filing.FilingType)
+		result, err := enhancedParser.ParseFiling(string(contentBytes), filing.FilingType, filePath)
 
 		if err != nil {
 			fmt.Printf("❌ Error parsing: %v\n", err)
@@ -240,23 +241,22 @@ func parseFilingFromFilename(filename, ticker string) models.Filing {
 
 // saveParseResult saves the parsing result to a JSON file
 func saveParseResult(result *models.FilingParseResult, outputFile string) error {
-	// For now, just create the file to indicate successful parsing
-	// In a full implementation, you would marshal the result to JSON
 	file, err := os.Create(outputFile)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
 
-	// Write a simple summary
-	fmt.Fprintf(file, "Filing: %s\n", result.Filing.AccessionNumber)
-	fmt.Fprintf(file, "Parsed at: %s\n", result.ParsedAt.Format(time.RFC3339))
-	fmt.Fprintf(file, "Method: %s\n", result.ParsingMethod)
-	fmt.Fprintf(file, "BTC Transactions: %d\n", len(result.BitcoinTransactions))
-	if result.SharesOutstanding != nil {
-		fmt.Fprintf(file, "Shares Outstanding: %.0f\n", result.SharesOutstanding.CommonShares)
+	// Marshal the full result to JSON
+	jsonData, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
+		return fmt.Errorf("error marshaling result to JSON: %w", err)
 	}
-	fmt.Fprintf(file, "Processing Time: %dms\n", result.ProcessingTimeMs)
+
+	_, err = file.Write(jsonData)
+	if err != nil {
+		return fmt.Errorf("error writing JSON to file: %w", err)
+	}
 
 	return nil
 }
