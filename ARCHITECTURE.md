@@ -1,239 +1,288 @@
-# mNAV Project Architecture
+# mNAV Architecture
 
 ## Overview
 
-The mNAV project is organized around a **data flow pipeline** that separates concerns into three distinct categories:
+The mNAV application is a sophisticated Bitcoin treasury analysis tool built in Go. It follows a clean, modular architecture organized around three main data flow categories:
 
-1. **🗂️ Data Collection** - Gather raw data from external sources
-2. **🔍 Data Interpretation** - Parse and extract structured information  
-3. **📊 Data Analysis** - Calculate metrics and generate insights
+1. **Data Collection** - Gathering raw data from external sources
+2. **Data Interpretation** - Parsing and extracting structured information
+3. **Data Analysis** - Calculating metrics and generating insights
 
-This separation makes the codebase more maintainable, testable, and allows for clear workflow execution.
-
-## Directory Structure
+## System Architecture
 
 ```
 mNAV/
-├── cmd/                          # Command-line tools organized by category
-│   ├── collection/               # Data Collection Tools
-│   │   └── edgar-data/           # SEC filing downloader
-│   ├── interpretation/           # Data Interpretation Tools  
-│   │   └── bitcoin-parser/       # Bitcoin transaction extractor
-│   ├── analysis/                 # Data Analysis Tools
-│   │   └── mnav-calculator/      # mNAV metrics calculator
-│   └── utilities/                # General utilities
-│
-├── pkg/                          # Package code organized by category
-│   ├── collection/               # External data gathering
-│   │   ├── edgar/                # SEC EDGAR client
-│   │   ├── yahoo/                # Yahoo Finance API
-│   │   ├── coinmarketcap/        # CoinMarketCap API
-│   │   └── scraper/              # Web scraping utilities
-│   │
-│   ├── interpretation/           # Data parsing and extraction
-│   │   ├── parser/               # Document parsers (regex, etc.)
-│   │   ├── grok/                 # AI-enhanced parsing
-│   │   ├── validators/           # Data validation
-│   │   └── normalizers/          # Data normalization
-│   │
-│   ├── analysis/                 # Calculations and metrics
-│   │   ├── metrics/              # mNAV, price targets, etc.
-│   │   ├── portfolio/            # Multi-company analysis
-│   │   ├── forecasting/          # Predictive analytics
-│   │   └── reporting/            # Report generation
-│   │
-│   └── shared/                   # Common components
-│       ├── models/               # Data structures
-│       ├── storage/              # Data persistence
-│       ├── config/               # Configuration management
-│       └── utils/                # General utilities
-│
-├── bin/                          # Compiled binaries (organized by category)
-│   ├── collection/
-│   ├── interpretation/
-│   ├── analysis/
-│   └── legacy/
-│
-└── data/                         # Data storage
-    └── edgar/companies/[SYMBOL]/ # Company-specific data
+├── cmd/                          # Command-line tools organized by function
+│   ├── collection/               # Data gathering commands
+│   │   ├── bitcoin-historical/   # Historical Bitcoin price collection
+│   │   ├── stock-data/          # Stock data from FMP + Alpha Vantage
+│   │   └── edgar-data/          # SEC filing downloads
+│   ├── analysis/                # Analysis and calculation commands
+│   │   ├── mnav-historical/     # Historical mNAV calculation
+│   │   ├── mnav-chart/          # Interactive chart generation
+│   │   └── comprehensive-analysis/ # Complete analysis suite
+│   └── interpretation/          # Data parsing and extraction
+│       └── bitcoin-parser/      # Bitcoin transaction extraction
+├── pkg/                         # Shared packages and libraries
+│   ├── collection/              # External API clients
+│   │   ├── fmp/                # Financial Modeling Prep client
+│   │   ├── alphavantage/       # Alpha Vantage client
+│   │   └── coinmarketcap/      # CoinMarketCap client
+│   ├── analysis/               # Calculation and metrics
+│   │   └── metrics/            # mNAV and financial calculations
+│   └── shared/                 # Common utilities
+│       ├── models/             # Data structures
+│       ├── config/             # Configuration management
+│       └── utils/              # Utility functions
+├── data/                       # Data storage (created at runtime)
+│   ├── bitcoin-prices/         # Historical Bitcoin price data
+│   ├── stock-data/            # Stock prices and company data
+│   ├── analysis/              # Analysis results and mNAV data
+│   └── charts/                # Generated charts and visualizations
+└── docs/                      # Documentation
+    └── mNAV_CHARTING.md      # Charting system documentation
 ```
 
-## Data Flow Pipeline
+## Core Components
 
-### Stage 1: Collection 🗂️
+### Data Collection Layer
 
-**Purpose**: Gather raw data from external sources without interpretation.
+**Purpose**: Gather raw data from external sources
 
-**Tools**:
-- `edgar-data`: Downloads SEC filings (8-K, 10-Q, 10-K)
-- Future: `yahoo-data`, `coinmarketcap-data`
+**Components**:
+- `bitcoin-historical`: Collects historical Bitcoin prices from CoinGecko
+- `stock-data`: Fetches stock prices, market cap, and company data from FMP and Alpha Vantage
+- `edgar-data`: Downloads SEC filings from EDGAR database
 
-**Example**:
+**Key Features**:
+- Professional API integrations (FMP, Alpha Vantage)
+- Rate limiting and error handling
+- Data persistence and caching
+- Multiple data source support
+
+### Data Interpretation Layer
+
+**Purpose**: Parse and extract structured information from raw data
+
+**Components**:
+- `bitcoin-parser`: Extracts Bitcoin transaction data from SEC filings using Grok AI
+
+**Key Features**:
+- AI-powered text extraction
+- Natural language processing for financial documents
+- Validation against known sources
+- Structured data output
+
+### Data Analysis Layer
+
+**Purpose**: Calculate metrics and generate insights
+
+**Components**:
+- `mnav-historical`: Calculates historical mNAV ratios and premiums
+- `mnav-chart`: Generates interactive charts and visualizations
+- `comprehensive-analysis`: Complete analysis suite with multiple metrics
+
+**Key Features**:
+- Historical mNAV calculation
+- Premium/discount analysis
+- Interactive chart generation
+- Multiple export formats (HTML, CSV, JSON)
+
+## Data Flow
+
+```
+1. Collection Phase
+   ├── Bitcoin Prices (CoinGecko) → bitcoin-historical
+   ├── Stock Data (FMP + Alpha Vantage) → stock-data
+   └── SEC Filings (EDGAR) → edgar-data
+
+2. Interpretation Phase
+   └── SEC Filings → bitcoin-parser → Bitcoin Transactions
+
+3. Analysis Phase
+   ├── All Data Sources → mnav-historical → Historical mNAV
+   └── mNAV Data → mnav-chart → Interactive Charts
+```
+
+## API Integrations
+
+### Financial Modeling Prep (FMP)
+- **Purpose**: Stock prices, market cap, company profiles
+- **Endpoints**: Historical prices, current quotes, company profiles
+- **Rate Limits**: 250 calls/day (free tier)
+
+### Alpha Vantage
+- **Purpose**: Shares outstanding, company fundamentals
+- **Endpoints**: Company overview, financial metrics
+- **Rate Limits**: 5 calls/minute, 500/day (free tier)
+
+### CoinGecko
+- **Purpose**: Historical Bitcoin prices
+- **Endpoints**: Market chart data
+- **Rate Limits**: 10-50 calls/minute (free)
+
+### Grok AI
+- **Purpose**: Bitcoin transaction extraction from SEC filings
+- **Usage**: Natural language processing of financial documents
+- **Rate Limits**: Varies by plan
+
+## Key Design Principles
+
+### 1. Separation of Concerns
+Each layer has a distinct responsibility:
+- Collection: Data gathering only
+- Interpretation: Parsing and extraction only  
+- Analysis: Calculations and insights only
+
+### 2. Interface-Driven Development
+- All external APIs accessed through well-defined interfaces
+- Easy to mock for testing
+- Simple to swap implementations
+
+### 3. Data Persistence
+- All collected data is saved locally
+- Enables offline analysis and reduces API calls
+- Structured file organization for easy access
+
+### 4. Error Handling and Resilience
+- Comprehensive error handling at all levels
+- Graceful degradation when APIs are unavailable
+- Retry logic with exponential backoff
+
+### 5. Observability
+- Structured logging throughout the application
+- Clear progress indicators for long-running operations
+- Detailed error messages with context
+
+## Configuration Management
+
+### Environment Variables
 ```bash
-# Download all MSTR filings from 2023
-./bin/collection/edgar-data -ticker=MSTR -start=2023-01-01
+FMP_API_KEY=your_financial_modeling_prep_key
+ALPHA_VANTAGE_API_KEY=your_alpha_vantage_key
+GROK_API_KEY=your_grok_api_key
 ```
 
-**Output**: Raw HTML/XML files stored in `data/edgar/companies/MSTR/raw_filings/`
+### Configuration Files
+- Company configurations for supported symbols
+- API endpoint configurations
+- Default parameters for analysis
 
-### Stage 2: Interpretation 🔍  
+## Data Models
 
-**Purpose**: Parse raw data and extract structured information.
+### Core Entities
 
-**Tools**:
-- `bitcoin-parser`: Extracts Bitcoin transactions from SEC filings
-- Future: `shares-parser`, `financials-parser`
-
-**Example**:
-```bash
-# Parse Bitcoin transactions from downloaded filings
-./bin/interpretation/bitcoin-parser -ticker=MSTR
+**BitcoinTransaction**
+```go
+type BitcoinTransaction struct {
+    Date         time.Time
+    BTCPurchased float64
+    USDSpent     float64
+    PricePerBTC  float64
+    Source       string
+    FilingType   string
+}
 ```
 
-**Output**: Structured JSON files with extracted transactions, shares data, etc.
-
-### Stage 3: Analysis 📊
-
-**Purpose**: Calculate metrics and generate insights from structured data.
-
-**Tools**:
-- `mnav-calculator`: Calculates mNAV, price targets, days to cover
-- Future: `portfolio-analyzer`, `risk-calculator`
-
-**Example**:
-```bash
-# Calculate mNAV metrics for multiple companies
-./bin/analysis/mnav-calculator -symbols=MSTR,SMLR,MARA -verbose
+**HistoricalMNAVPoint**
+```go
+type HistoricalMNAVPoint struct {
+    Date              string
+    StockPrice        float64
+    BitcoinPrice      float64
+    BitcoinHoldings   float64
+    SharesOutstanding float64
+    MarketCap         float64
+    BitcoinValue      float64
+    MNAV              float64
+    MNAVPerShare      float64
+    Premium           float64
+}
 ```
 
-**Output**: Calculated metrics, reports, and insights
+## Testing Strategy
 
-## Package Dependencies
+### Unit Tests
+- Individual package testing
+- Mock external dependencies
+- Table-driven test patterns
 
-### Collection Layer
-- **Dependencies**: External APIs, HTTP clients
-- **Exports**: Raw data files, API responses
-- **No dependencies on**: Interpretation or Analysis layers
+### Integration Tests
+- End-to-end workflow testing
+- API integration validation
+- Data consistency checks
 
-### Interpretation Layer  
-- **Dependencies**: Shared models, storage interfaces
-- **Exports**: Structured data objects
-- **No dependencies on**: Collection layer (operates on stored files)
+### Validation Tests
+- Cross-reference with known sources (SaylorTracker.com)
+- Historical data accuracy verification
+- Calculation validation
 
-### Analysis Layer
-- **Dependencies**: Shared models, structured data
-- **Exports**: Calculated metrics, reports  
-- **No dependencies on**: Collection or Interpretation layers
+## Performance Considerations
 
-### Shared Components
-- **Models**: Common data structures used across all layers
-- **Storage**: Data persistence and retrieval interfaces
-- **Config**: Configuration management
-- **Utils**: General utilities
+### API Rate Limiting
+- Respect API rate limits with built-in delays
+- Batch requests where possible
+- Cache responses to minimize API calls
 
-## Command Categories
+### Data Processing
+- Stream processing for large datasets
+- Parallel processing where appropriate
+- Memory-efficient data structures
 
-All commands clearly identify their category:
+### Storage Optimization
+- Compressed JSON for large datasets
+- Indexed data structures for fast lookups
+- Cleanup of temporary files
 
-### Collection Commands
-```
-🗂️  DATA COLLECTION - SEC EDGAR Filings
-Collects raw SEC filing documents for future interpretation and analysis.
-```
+## Security Considerations
 
-### Interpretation Commands  
-```
-🔍 DATA INTERPRETATION - Bitcoin Transaction Parser
-Extracts Bitcoin transaction data from SEC filing documents.
-```
+### API Key Management
+- Environment variable storage
+- No hardcoded credentials
+- Secure key rotation support
 
-### Analysis Commands
-```
-📊 DATA ANALYSIS - mNAV Calculator  
-Calculates net asset value metrics for Bitcoin treasury companies.
-```
+### Data Validation
+- Input sanitization for all external data
+- Schema validation for API responses
+- Error handling for malformed data
 
-## Build System
+### Network Security
+- HTTPS for all external communications
+- Certificate validation
+- Timeout configurations
 
-The Makefile is organized by categories:
+## Deployment and Operations
 
-```bash
-# Build all tools by category
-make collection      # Build data collection tools
-make interpretation  # Build data interpretation tools  
-make analysis       # Build data analysis tools
+### Build System
+- Makefile-based build automation
+- Category-based building (collection, analysis, interpretation)
+- Cross-platform compilation support
 
-# Build individual tools
-make edgar-data      # SEC filing collector
-make bitcoin-parser  # Bitcoin transaction extractor
-make mnav-calculator # mNAV metrics calculator
+### Monitoring
+- Structured logging with levels
+- Progress tracking for long operations
+- Error reporting and alerting
 
-# Complete workflow example
-make workflow-mstr   # Full MSTR analysis pipeline
-```
+### Maintenance
+- Automated dependency updates
+- Regular data validation checks
+- Performance monitoring
 
-## Usage Patterns
+## Future Architecture Considerations
 
-### Complete Workflow
-```bash
-# 1. Collect raw data
-./bin/collection/edgar-data -ticker=MSTR -start=2023-01-01
+### Scalability
+- Microservice decomposition for high-volume usage
+- Database backend for large-scale data storage
+- Distributed processing capabilities
 
-# 2. Extract structured data  
-./bin/interpretation/bitcoin-parser -ticker=MSTR
+### Real-time Processing
+- WebSocket connections for live data
+- Event-driven architecture
+- Stream processing frameworks
 
-# 3. Calculate metrics
-./bin/analysis/mnav-calculator -symbols=MSTR -verbose
-```
+### Web Interface
+- REST API for web frontend
+- Real-time dashboard capabilities
+- User authentication and authorization
 
-### Selective Processing
-```bash
-# Only run analysis if data already exists
-./bin/analysis/mnav-calculator -symbols=MSTR,SMLR,MARA
-
-# Re-parse existing raw filings with new logic
-./bin/interpretation/bitcoin-parser -ticker=MSTR
-
-# Collect only specific filing types
-./bin/collection/edgar-data -ticker=MSTR -filing-types="10-Q,10-K"
-```
-
-## Benefits of This Architecture
-
-1. **Clear Separation of Concerns**: Each layer has a distinct responsibility
-2. **Independent Development**: Teams can work on different layers independently  
-3. **Testability**: Each layer can be tested in isolation
-4. **Scalability**: Easy to add new tools in each category
-5. **Workflow Clarity**: Users understand what each tool does
-6. **Maintainability**: Dependencies are clearly defined and minimized
-7. **Flexibility**: Can run partial workflows as needed
-
-## Migration from Legacy
-
-Legacy tools are preserved in `bin/legacy/` and can be built with `make legacy` during the transition period. The new categorized tools provide the same functionality with better organization.
-
-## Future Enhancements
-
-### Planned Tools
-
-**Collection**:
-- `yahoo-data`: Stock price and financial data collector
-- `crypto-data`: Cryptocurrency price data collector  
-- `news-data`: Financial news collector
-
-**Interpretation**:
-- `shares-parser`: Extract shares outstanding from filings
-- `financials-parser`: Extract financial metrics
-- `sentiment-analyzer`: Analyze news sentiment
-
-**Analysis**:
-- `portfolio-analyzer`: Multi-company portfolio analysis
-- `risk-calculator`: Risk metrics and scenarios
-- `report-generator`: Automated report creation
-
-### Planned Features
-- Web UI for workflow management
-- Automated scheduling and monitoring
-- Real-time data updates
-- Advanced AI/ML interpretation models
-- Integration with external analytics platforms 
+This architecture provides a solid foundation for Bitcoin treasury analysis while maintaining flexibility for future enhancements and scaling requirements. 

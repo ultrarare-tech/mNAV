@@ -1,4 +1,4 @@
-# mNAV Project Makefile - Organized by Data Flow Categories
+# mNAV Project Makefile - Bitcoin Treasury Analysis Tools
 
 # Go parameters
 GOCMD=go
@@ -8,113 +8,69 @@ GOTEST=$(GOCMD) test
 GOGET=$(GOCMD) get
 GOMOD=$(GOCMD) mod
 
-# =============================================================================
-# DATA COLLECTION TOOLS - Gather raw data from external sources
-# =============================================================================
-EDGAR_DATA_BINARY=bin/collection/edgar-data
-EDGAR_DATA_SRC=cmd/collection/edgar-data
-
-# =============================================================================
-# DATA INTERPRETATION TOOLS - Parse and extract structured data
-# =============================================================================
-BITCOIN_PARSER_BINARY=bin/interpretation/bitcoin-parser
-BITCOIN_PARSER_SRC=cmd/interpretation/bitcoin-parser
-
-GROK_TEST_BINARY=bin/interpretation/grok-test
-GROK_TEST_SRC=cmd/interpretation/grok-test
-
-# =============================================================================
-# DATA ANALYSIS TOOLS - Calculate metrics and insights
-# =============================================================================
-MNAV_CALCULATOR_BINARY=bin/analysis/mnav-calculator
-MNAV_CALCULATOR_SRC=cmd/analysis/mnav-calculator
-
-# =============================================================================
-# LEGACY TOOLS - Original commands (transitional)
-# =============================================================================
-EDGAR_ENHANCED_BINARY=bin/legacy/edgar-enhanced
-RAW_FILING_MANAGER_BINARY=bin/legacy/raw-filing-manager
-VALIDATE_GROK_BINARY=bin/legacy/validate-grok
-
-EDGAR_ENHANCED_SRC=cmd/edgar-enhanced
-RAW_FILING_MANAGER_SRC=cmd/raw-filing-manager
-VALIDATE_GROK_SRC=cmd/validate-grok
-
 .PHONY: all build clean test deps help
-.PHONY: collection interpretation analysis legacy
-.PHONY: edgar-data bitcoin-parser mnav-calculator
+.PHONY: collection-tools analysis-tools interpretation-tools
 
 # Default target
-all: build
-
-# Build all categories
-build: collection interpretation analysis
+all: collection-tools analysis-tools interpretation-tools
 
 # =============================================================================
 # CATEGORY BUILDERS
 # =============================================================================
 
 # Build all collection tools
-collection: $(EDGAR_DATA_BINARY)
+collection-tools: bitcoin-historical stock-data edgar-data
 	@echo "✅ Collection tools built successfully"
 
-# Build all interpretation tools  
-interpretation: $(BITCOIN_PARSER_BINARY) $(GROK_TEST_BINARY)
-	@echo "✅ Interpretation tools built successfully"
-
-# Build all analysis tools
-analysis: $(MNAV_CALCULATOR_BINARY)
+# Build all analysis tools  
+analysis-tools: mnav-historical mnav-chart comprehensive-analysis
 	@echo "✅ Analysis tools built successfully"
 
-# Build legacy tools (when needed)
-legacy: $(RAW_FILING_MANAGER_BINARY) $(VALIDATE_GROK_BINARY)
-	@echo "✅ Legacy tools built successfully"
+# Build all interpretation tools
+interpretation-tools: bitcoin-parser
+	@echo "✅ Interpretation tools built successfully"
 
 # =============================================================================
 # INDIVIDUAL TOOL BUILDERS
 # =============================================================================
 
 # Collection Tools
-$(EDGAR_DATA_BINARY):
-	@echo "🗂️  Building EDGAR data collection tool..."
-	@mkdir -p bin/collection
-	$(GOBUILD) -o $(EDGAR_DATA_BINARY) ./$(EDGAR_DATA_SRC)
+bitcoin-historical:
+	@echo "🔨 Building bitcoin-historical..."
+	@mkdir -p bin
+	@go build -o bin/bitcoin-historical cmd/collection/bitcoin-historical/main.go
 
-# Interpretation Tools
-$(BITCOIN_PARSER_BINARY):
-	@echo "🔍 Building Bitcoin transaction parser..."
-	@mkdir -p bin/interpretation
-	$(GOBUILD) -o $(BITCOIN_PARSER_BINARY) ./$(BITCOIN_PARSER_SRC)
+stock-data:
+	@echo "🔨 Building stock-data..."
+	@mkdir -p bin
+	@go build -o bin/stock-data cmd/collection/stock-data/main.go
 
-$(GROK_TEST_BINARY):
-	@echo "🤖 Building Grok AI test tool..."
-	@mkdir -p bin/interpretation
-	$(GOBUILD) -o $(GROK_TEST_BINARY) ./$(GROK_TEST_SRC)
+edgar-data:
+	@echo "🔨 Building edgar-data..."
+	@mkdir -p bin
+	@go build -o bin/edgar-data cmd/collection/edgar-data/main.go
 
 # Analysis Tools
-$(MNAV_CALCULATOR_BINARY):
-	@echo "📊 Building mNAV calculator..."
-	@mkdir -p bin/analysis
-	$(GOBUILD) -o $(MNAV_CALCULATOR_BINARY) ./$(MNAV_CALCULATOR_SRC)
+mnav-historical:
+	@echo "🔨 Building mnav-historical..."
+	@mkdir -p bin
+	@go build -o bin/mnav-historical cmd/analysis/mnav-historical/main.go
 
-# Legacy Tools
-$(RAW_FILING_MANAGER_BINARY):
-	@echo "📁 Building raw filing manager (legacy)..."
-	@mkdir -p bin/legacy
-	$(GOBUILD) -o $(RAW_FILING_MANAGER_BINARY) ./$(RAW_FILING_MANAGER_SRC)
+mnav-chart:
+	@echo "🔨 Building mnav-chart..."
+	@mkdir -p bin
+	@go build -o bin/mnav-chart cmd/analysis/mnav-chart/main.go
 
-$(VALIDATE_GROK_BINARY):
-	@echo "🤖 Building Grok validator (legacy)..."
-	@mkdir -p bin/legacy
-	$(GOBUILD) -o $(VALIDATE_GROK_BINARY) ./$(VALIDATE_GROK_SRC)
+comprehensive-analysis:
+	@echo "🔨 Building comprehensive-analysis..."
+	@mkdir -p bin
+	@go build -o bin/comprehensive-analysis cmd/analysis/comprehensive-analysis/main.go
 
-# =============================================================================
-# INDIVIDUAL TARGETS
-# =============================================================================
-edgar-data: $(EDGAR_DATA_BINARY)
-bitcoin-parser: $(BITCOIN_PARSER_BINARY)
-grok-test: $(GROK_TEST_BINARY)
-mnav-calculator: $(MNAV_CALCULATOR_BINARY)
+# Interpretation Tools
+bitcoin-parser:
+	@echo "🔨 Building bitcoin-parser..."
+	@mkdir -p bin
+	@go build -o bin/bitcoin-parser cmd/interpretation/bitcoin-parser/main.go
 
 # =============================================================================
 # UTILITY TARGETS
@@ -140,138 +96,87 @@ deps:
 # Development helpers
 dev-setup: deps
 	@echo "🛠️  Setting up development environment..."
-	@mkdir -p data/edgar/companies
+	@mkdir -p data/bitcoin-prices/historical
+	@mkdir -p data/stock-data
+	@mkdir -p data/analysis/mnav
+	@mkdir -p data/charts
 	@mkdir -p debug
 
 # =============================================================================
-# EXAMPLE WORKFLOWS
+# WORKFLOWS
 # =============================================================================
 
-# Complete workflow example: MSTR analysis
-workflow-mstr: collection interpretation analysis
-	@echo "🚀 Running complete MSTR analysis workflow..."
-	@echo "Step 1: Collecting EDGAR filings for MSTR..."
-	./$(EDGAR_DATA_BINARY) -ticker=MSTR -filing-types="8-K,10-Q,10-K" -start=2023-01-01 -dry-run
-	@echo "Step 2: Parsing Bitcoin transactions..."
-	./$(BITCOIN_PARSER_BINARY) -ticker=MSTR -dry-run
-	@echo "Step 3: Calculating mNAV metrics..."
-	./$(MNAV_CALCULATOR_BINARY) -symbols=MSTR -verbose
+# Complete mNAV analysis workflow for MSTR
+workflow-mstr: all
+	@echo "🚀 Running complete MSTR mNAV analysis workflow..."
+	@echo "Step 1: Collecting Bitcoin price history..."
+	@./bin/bitcoin-historical -start=2020-08-11 || echo "⚠️ Bitcoin price collection failed"
+	@echo "Step 2: Collecting MSTR stock data..."
+	@./bin/stock-data -symbol=MSTR -start=2020-08-11 || echo "⚠️ Stock data collection failed (check API keys)"
+	@echo "Step 3: Calculating historical mNAV..."
+	@./bin/mnav-historical -symbol=MSTR -start=2020-08-11 || echo "⚠️ mNAV calculation failed"
+	@echo "Step 4: Generating mNAV chart..."
+	@./bin/mnav-chart -format=html || echo "⚠️ Chart generation failed"
+	@echo "✅ Workflow complete! Check data/charts/ for results"
 
-# Demo the new categorized structure
+# Demo the application capabilities
 demo:
-	@echo "📋 mNAV Tool Categories:"
+	@echo "📋 mNAV Bitcoin Treasury Analysis Tool"
 	@echo ""
-	@echo "🗂️  DATA COLLECTION:"
-	@echo "   edgar-data        - Downloads SEC filings"
+	@echo "🗂️  DATA COLLECTION TOOLS:"
+	@echo "   bitcoin-historical   - Download historical Bitcoin prices"
+	@echo "   stock-data          - Collect stock prices & company data"
+	@echo "   edgar-data          - Download SEC filings"
 	@echo ""
-	@echo "🔍 DATA INTERPRETATION:"
-	@echo "   bitcoin-parser    - Extracts Bitcoin transactions"
-	@echo "   grok-test         - Tests Grok AI integration"
+	@echo "📊 ANALYSIS TOOLS:"
+	@echo "   mnav-historical     - Calculate historical mNAV ratios"
+	@echo "   mnav-chart          - Generate interactive charts"
+	@echo "   comprehensive-analysis - Complete analysis suite"
 	@echo ""
-	@echo "📊 DATA ANALYSIS:"
-	@echo "   mnav-calculator   - Calculates mNAV metrics"
+	@echo "🔍 INTERPRETATION TOOLS:"
+	@echo "   bitcoin-parser      - Extract Bitcoin transactions from filings"
 	@echo ""
-	@echo "🏗️  Build commands:"
-	@echo "   make collection   - Build all collection tools"
-	@echo "   make interpretation - Build all interpretation tools"
-	@echo "   make analysis     - Build all analysis tools"
+	@echo "🚀 WORKFLOWS:"
+	@echo "   make workflow-mstr  - Complete MSTR analysis"
+	@echo "   make all           - Build all tools"
+	@echo "   make dev-setup     - Setup development environment"
 
 # Help target
 help:
-	@echo "📋 Available commands:"
+	@echo "📋 mNAV - Bitcoin Treasury Analysis Tool"
 	@echo ""
-	@echo "🏗️  Build Commands:"
-	@echo "   make build-all          - Build all tools"
-	@echo "   make collection-tools   - Build collection tools"
-	@echo "   make interpretation-tools - Build interpretation tools"
+	@echo "🏗️  BUILD COMMANDS:"
+	@echo "   make all                - Build all tools"
+	@echo "   make collection-tools   - Build data collection tools"
 	@echo "   make analysis-tools     - Build analysis tools"
-	@echo ""
-	@echo "📊 Collection Tools:"
-	@echo "   make edgar-scraper      - Build EDGAR filing scraper"
-	@echo "   make stock-prices       - Build stock price collector"
-	@echo "   make bitcoin-price      - Build Bitcoin price collector"
-	@echo ""
-	@echo "🔍 Interpretation Tools:"
-	@echo "   make bitcoin-parser     - Build Bitcoin transaction parser"
-	@echo "   make grok-test          - Build Grok AI test tool"
-	@echo ""
-	@echo "📈 Analysis Tools:"
-	@echo "   make data-summary       - Build data summary tool"
-	@echo "   make comprehensive-analysis - Build comprehensive analysis tool"
-	@echo ""
-	@echo "🧹 Utility Commands:"
-	@echo "   make clean              - Clean build artifacts"
-	@echo "   make test               - Run tests"
-	@echo ""
-	@echo "📂 CATEGORY TARGETS:"
-	@echo "  collection       - Build data collection tools"
-	@echo "  interpretation   - Build data interpretation tools"
-	@echo "  analysis         - Build data analysis tools"
-	@echo "  legacy           - Build legacy tools"
+	@echo "   make interpretation-tools - Build interpretation tools"
 	@echo ""
 	@echo "🔧 INDIVIDUAL TOOLS:"
-	@echo "  edgar-data       - SEC filing collector"
-	@echo "  bitcoin-parser   - Bitcoin transaction extractor"
-	@echo "  grok-test        - Grok AI integration tester"
-	@echo "  mnav-calculator  - mNAV metrics calculator"
+	@echo "   make bitcoin-historical - Historical Bitcoin price collector"
+	@echo "   make stock-data        - Stock data collector (FMP + Alpha Vantage)"
+	@echo "   make edgar-data        - SEC filing downloader"
+	@echo "   make mnav-historical   - Historical mNAV calculator"
+	@echo "   make mnav-chart        - Interactive chart generator"
+	@echo "   make bitcoin-parser    - Bitcoin transaction extractor"
 	@echo ""
-	@echo "🛠️  UTILITY TARGETS:"
-	@echo "  all              - Build all tools (default)"
-	@echo "  build            - Build all tools"
-	@echo "  clean            - Clean build artifacts"
-	@echo "  test             - Run tests"
-	@echo "  deps             - Download dependencies"
-	@echo "  dev-setup        - Set up development environment"
+	@echo "🛠️  UTILITY COMMANDS:"
+	@echo "   make clean             - Clean build artifacts"
+	@echo "   make test              - Run tests"
+	@echo "   make deps              - Download dependencies"
+	@echo "   make dev-setup         - Setup development environment"
 	@echo ""
 	@echo "🚀 WORKFLOWS:"
-	@echo "  workflow-mstr    - Complete MSTR analysis demo"
-	@echo "  demo             - Show tool organization"
-	@echo "  help             - Show this help"
-
-# Analysis tools
-data-summary:
-	@echo "Building data summary tool..."
-	@go build -o bin/data-summary cmd/analysis/data-summary/main.go
-
-saylor-tracker-comparison:
-	@echo "Building SaylorTracker comparison tool..."
-	@go build -o bin/saylor-tracker-comparison cmd/analysis/saylor-tracker-comparison/main.go
-
-transaction-audit:
-	@echo "Building transaction audit tool..."
-	@go build -o bin/transaction-audit cmd/analysis/transaction-audit/main.go
-
-source-links:
-	@echo "Building source links tool..."
-	@go build -o bin/source-links cmd/analysis/source-links/main.go
-
-filing-comparison:
-	@echo "Building filing comparison tool..."
-	@go build -o bin/filing-comparison cmd/analysis/filing-comparison/main.go
-
-comprehensive-analysis:
-	@echo "🔨 Building comprehensive analysis tool..."
-	@go build -o cmd/analysis/comprehensive-analysis/comprehensive-analysis cmd/analysis/comprehensive-analysis/main.go
-
-analysis-tools: data-summary comprehensive-analysis mnav-historical mnav-chart
-	@echo "✅ All analysis tools built"
-
-# Build specific tools
-bitcoin-historical:
-	@echo "🔨 Building bitcoin-historical..."
-	@go build -o bin/bitcoin-historical cmd/collection/bitcoin-historical/main.go
-
-mnav-historical:
-	@echo "🔨 Building mnav-historical..."
-	@go build -o bin/mnav-historical cmd/analysis/mnav-historical/main.go
-
-mnav-chart:
-	@echo "🔨 Building mnav-chart..."
-	@go build -o bin/mnav-chart cmd/analysis/mnav-chart/main.go
-
-stock-data:
-	@echo "🔨 Building stock-data..."
-	@go build -o bin/stock-data cmd/collection/stock-data/main.go
-
-# Build all targets
-all: ticker-update edgar-scraper mnav btc-price shares-extractor transaction-extractor enhanced-btc-extractor collection-runner interpretation-runner comprehensive-analyzer validate-grok grok-btc-extractor bitcoin-historical mnav-historical mnav-chart stock-data 
+	@echo "   make workflow-mstr     - Complete MSTR analysis workflow"
+	@echo "   make demo             - Show available tools"
+	@echo ""
+	@echo "📋 PREREQUISITES:"
+	@echo "   • Go 1.21+ installed"
+	@echo "   • API keys in .env file:"
+	@echo "     - FMP_API_KEY (Financial Modeling Prep)"
+	@echo "     - ALPHA_VANTAGE_API_KEY (Alpha Vantage)"
+	@echo "     - GROK_API_KEY (for Bitcoin parsing)"
+	@echo ""
+	@echo "📚 DOCUMENTATION:"
+	@echo "   • README.md - Main documentation"
+	@echo "   • docs/mNAV_CHARTING.md - Charting guide"
+	@echo "   • ARCHITECTURE.md - System architecture" 
