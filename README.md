@@ -11,6 +11,7 @@ A sophisticated Go application for analyzing Bitcoin holdings and calculating mN
 - 💰 **Calculate current mNAV ratios** and premium percentages
 - 📋 **Compare results** with external sources like SaylorTracker.com
 - 🎨 **Create interactive visualizations** of Bitcoin accumulation patterns
+- 💼 **Track personal portfolios** with FBTC/MSTR allocation analysis and rebalancing recommendations
 
 ## 🚀 Quick Start
 
@@ -32,14 +33,21 @@ A sophisticated Go application for analyzing Bitcoin holdings and calculating mN
 # Build all tools
 make all
 
-# Run the complete workflow (365 days of historical data)
+# Run the complete MSTR analysis workflow
 ./demo-workflow.sh
+
+# Portfolio tracking workflow
+make workflow-portfolio
 
 # OR manual workflow:
 ./bin/bitcoin-historical -start=2020-08-11      # Get Bitcoin prices (free!)
 ./bin/stock-data -symbol=MSTR -start=2020-08-11  # Get stock data  
 ./bin/mnav-historical -symbol=MSTR -start=2020-08-11  # Calculate mNAV
 ./bin/mnav-chart -format=html                   # Generate chart
+
+# Portfolio tracking
+./bin/portfolio-importer -csv your_portfolio.csv  # Import portfolio data
+./bin/portfolio-analyzer -latest -rebalance 5.0   # Analyze & rebalance
 ```
 
 ## 🆕 Recent Improvements
@@ -70,6 +78,13 @@ make all
 - **Premium/discount tracking** relative to Bitcoin NAV per share
 - **Multiple export formats** (HTML, CSV, JSON)
 
+### **Portfolio Tracking & Analysis**
+- **Fidelity CSV import** for portfolio position tracking
+- **Asset allocation analysis** with Bitcoin exposure calculation
+- **FBTC/MSTR ratio optimization** and rebalancing recommendations
+- **Historical portfolio tracking** with performance metrics
+- **Multi-account support** (Traditional IRA, Roth IRA, etc.)
+
 ### **Professional Data Sources**
 - **Financial Modeling Prep** for stock prices and market data
 - **Alpha Vantage** for shares outstanding and company fundamentals  
@@ -89,11 +104,15 @@ mNAV/
 │   │   ├── mnav-historical/     # Historical mNAV calculation
 │   │   ├── mnav-chart/          # Chart generation
 │   │   └── comprehensive-analysis/ # Complete analysis suite
+│   ├── portfolio/               # Portfolio management tools
+│   │   ├── importer/            # CSV portfolio importer
+│   │   └── analyzer/            # Portfolio analysis & rebalancing
 │   └── interpretation/          # Data parsing & extraction
 │       └── bitcoin-parser/      # Extract Bitcoin transactions
 ├── pkg/                         # Shared packages
 │   ├── collection/              # API clients (FMP, Alpha Vantage)
 │   ├── analysis/               # Metrics & calculations
+│   ├── portfolio/              # Portfolio tracking & analysis
 │   └── shared/                 # Common models & utilities
 └── docs/                       # Documentation
     └── mNAV_CHARTING.md       # Charting system guide
@@ -140,6 +159,21 @@ Based on the latest SEC filing analysis:
 ./bin/bitcoin-parser -ticker=MSTR -use-grok
 ```
 
+### Portfolio Management
+```bash
+# Import portfolio from CSV
+./bin/portfolio-importer -csv Portfolio_Positions_Jun-11-2025.csv
+
+# Analyze latest portfolio
+./bin/portfolio-analyzer -latest
+
+# Calculate rebalancing recommendations
+./bin/portfolio-analyzer -latest -rebalance 5.0
+
+# View historical performance
+./bin/portfolio-analyzer -historical
+```
+
 ## 📊 Output Examples
 
 ### mNAV Chart
@@ -163,6 +197,7 @@ JSON/CSV exports containing:
 make all                    # Build all tools
 make collection-tools       # Build data collection tools only
 make analysis-tools         # Build analysis tools only
+make portfolio-tools        # Build portfolio management tools only
 make clean                  # Clean build artifacts
 ```
 
@@ -194,6 +229,7 @@ Current validation results show **98.8% accuracy** for MSTR Bitcoin holdings.
 ## 📝 Documentation
 
 - [**mNAV Charting Guide**](docs/mNAV_CHARTING.md) - Complete charting system documentation
+- [**Portfolio Tracking Guide**](docs/PORTFOLIO_TRACKING.md) - Portfolio management system
 - [**Architecture Overview**](ARCHITECTURE.md) - System design and components
 - [**API Integration Guide**](docs/API_SETUP.md) - Setting up external APIs
 

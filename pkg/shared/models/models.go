@@ -124,15 +124,16 @@ type Filing struct {
 
 // BitcoinTransaction represents a Bitcoin transaction found in an SEC filing
 type BitcoinTransaction struct {
-	Date            time.Time `json:"date"`
-	FilingType      string    `json:"filingType"`
-	FilingURL       string    `json:"filingUrl"`
-	BTCPurchased    float64   `json:"btcPurchased"`
-	USDSpent        float64   `json:"usdSpent"`
-	AvgPriceUSD     float64   `json:"avgPriceUsd"`
-	TotalBTCAfter   float64   `json:"totalBtcAfter,omitempty"`
-	ExtractedText   string    `json:"extractedText"`
-	ConfidenceScore float64   `json:"confidenceScore"`
+	Date            time.Time              `json:"date"`
+	FilingType      string                 `json:"filingType"`
+	FilingURL       string                 `json:"filingUrl"`
+	BTCPurchased    float64                `json:"btcPurchased"`
+	USDSpent        float64                `json:"usdSpent"`
+	AvgPriceUSD     float64                `json:"avgPriceUsd"`
+	TotalBTCAfter   float64                `json:"totalBtcAfter,omitempty"`
+	ExtractedText   string                 `json:"extractedText"`
+	ConfidenceScore float64                `json:"confidenceScore"`
+	Metadata        map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // FilingParseResult represents the result of parsing a filing with enhanced parser
@@ -144,4 +145,17 @@ type FilingParseResult struct {
 	ParsingMethod       string                   `json:"parsingMethod"`
 	ProcessingTimeMs    int                      `json:"processingTimeMs"`
 	Errors              []string                 `json:"errors,omitempty"`
+}
+
+// ComprehensiveBitcoinAnalysis represents a comprehensive analysis of Bitcoin holdings
+type ComprehensiveBitcoinAnalysis struct {
+	Symbol             string                 `json:"symbol"`
+	Source             string                 `json:"source"`
+	LastUpdated        string                 `json:"last_updated"`
+	TotalBTC           float64                `json:"total_btc"`
+	TotalInvestmentUSD float64                `json:"total_investment_usd"`
+	AveragePrice       float64                `json:"average_price"`
+	AllTransactions    []BitcoinTransaction   `json:"allTransactions"`
+	DataSources        []string               `json:"data_sources"`
+	Metadata           map[string]interface{} `json:"metadata,omitempty"`
 }

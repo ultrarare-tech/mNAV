@@ -66,75 +66,80 @@ func (c *CombinedTransactions) GetTransactionsForCompany(symbol string) (Company
 }
 
 // CalculateYieldFromTransactions calculates the Bitcoin yield from the most recent transactions
-// by looking at the recent purchase patterns over the last 30-90 days
+// by looking at the recent purchase patterns over the last 90 days
 func CalculateYieldFromTransactions(transactions []Transaction, totalHoldings float64) (float64, error) {
-	if len(transactions) < 2 {
+	if len(transactions) < 1 {
 		return 0, fmt.Errorf("not enough transactions to calculate yield")
 	}
 
-	// If we have more than 10 transactions, just use the most recent ones
-	recentCount := 10
-	if len(transactions) < recentCount {
-		recentCount = len(transactions)
+	if totalHoldings <= 0 {
+		return 0, fmt.Errorf("total holdings must be greater than zero")
 	}
 
-	// Use the most recent transactions
-	recentTransactions := transactions[:recentCount]
+	// Use transactions from the last 90 days
+	recentTransactions := getRecentTransactions(transactions, 90)
+
+	// If no transactions in last 90 days, use all available transactions
+	if len(recentTransactions) == 0 {
+		recentTransactions = transactions
+	}
 
 	// Calculate total BTC acquired in the period
 	var totalAcquired float64
+	var validTransactionCount int
 	for _, t := range recentTransactions {
 		if t.Type == "purchase" {
 			totalAcquired += t.Quantity
+			validTransactionCount++
 		} else if t.Type == "sale" {
-			totalAcquired += t.Quantity // Note: sale quantities are already negative
+			totalAcquired += t.Quantity // Note: sale quantities should be negative
+			validTransactionCount++
 		}
 	}
 
-	// For companies like MSTR with lots of transactions, use a default value
-	if len(transactions) > 20 && totalHoldings > 100000 {
-		// For MSTR, we know from historical data that the yield is around 0.12%
-		return 0.0012, nil
+	// If no valid transactions found, return minimum yield
+	if validTransactionCount == 0 {
+		return 0.0001, nil // 0.01% daily minimum
 	}
 
-	// For SMLR, which has fewer transactions, use a simpler calculation
-	if totalHoldings < 5000 {
-		// For SMLR, based on their acquisition pattern, use 0.33%
-		return 0.0033, nil
-	}
+	// Calculate the time period for the transactions
+	daysDiff := 90.0 // Default to 90 days
 
-	// Fallback calculation - estimate based on recent transactions
-	// Use 90 days as default timeframe if dates are problematic
-	daysDiff := 90.0
-
-	// Try to calculate based on dates
+	// Try to calculate actual days based on transaction dates
 	if len(recentTransactions) >= 2 {
 		firstDate, err1 := parseTransactionDate(recentTransactions[len(recentTransactions)-1].Date)
 		lastDate, err2 := parseTransactionDate(recentTransactions[0].Date)
 
 		if err1 == nil && err2 == nil && lastDate.After(firstDate) {
 			calculatedDays := lastDate.Sub(firstDate).Hours() / 24
-			if calculatedDays > 0 {
+			if calculatedDays > 0 && calculatedDays <= 365 { // Reasonable range
 				daysDiff = calculatedDays
 			}
 		}
+	} else if len(recentTransactions) == 1 {
+		// Single transaction - assume it represents recent activity pattern
+		// Use a shorter period to avoid diluting the yield calculation
+		daysDiff = 30.0
 	}
 
-	// Calculate daily yield
-	if totalHoldings <= 0 {
-		return 0, fmt.Errorf("total holdings must be greater than zero")
-	}
+	// Calculate the acquisition rate as percentage of total holdings
+	acquisitionRate := totalAcquired / totalHoldings
 
-	// Annualized rate: (total acquired / total holdings) * (365 / days)
-	annualizedRate := (totalAcquired / totalHoldings) * (365 / daysDiff)
+	// Annualize the rate: (acquisition rate) * (365 / days in period)
+	annualizedRate := acquisitionRate * (365 / daysDiff)
 
-	// Daily yield = annualized rate / 365
+	// Convert to daily yield
 	dailyYield := annualizedRate / 365
 
-	// Sanity check - cap the yield at reasonable values
-	if dailyYield > 0.01 { // More than 1% daily is unlikely
+	// Apply reasonable bounds
+	if dailyYield > 0.01 { // Cap at 1% daily (very aggressive)
 		dailyYield = 0.01
-	} else if dailyYield < 0.0001 { // Less than 0.01% daily is too small
+	} else if dailyYield < 0.0001 { // Minimum of 0.01% daily
+		dailyYield = 0.0001
+	}
+
+	// Handle negative yields (net selling) by setting to minimum
+	if dailyYield < 0 {
 		dailyYield = 0.0001
 	}
 
