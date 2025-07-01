@@ -1,262 +1,379 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"sort"
-	"strconv"
-	"strings"
-	"time"
 
 	"github.com/jeffreykibler/mNAV/pkg/portfolio/analyzer"
 	"github.com/jeffreykibler/mNAV/pkg/portfolio/models"
-	"github.com/jeffreykibler/mNAV/pkg/portfolio/tracker"
 )
 
 func main() {
 	var (
-		dataDir     = flag.String("data", "data/portfolio/processed", "Directory containing processed portfolio data")
-		latest      = flag.Bool("latest", false, "Analyze latest portfolio")
-		date        = flag.String("date", "", "Analyze portfolio for specific date (YYYY-MM-DD)")
-		rebalance   = flag.String("rebalance", "", "Calculate rebalancing for target FBTC:MSTR ratio (e.g., '5.0')")
-		historical  = flag.Bool("historical", false, "Show historical summary")
-		performance = flag.Bool("performance", false, "Show performance metrics")
-		verbose     = flag.Bool("v", false, "Verbose output")
+		latest     = flag.Bool("latest", false, "Analyze latest portfolio snapshot")
+		date       = flag.String("date", "", "Analyze specific date (YYYY-MM-DD)")
+		historical = flag.Bool("historical", false, "Show historical portfolio summary")
+		mnav       = flag.Bool("mnav", true, "Include mNAV-based dynamic rebalancing analysis")
+		verbose    = flag.Bool("verbose", false, "Enable verbose output")
 	)
 	flag.Parse()
 
-	tracker := tracker.NewTracker(*dataDir)
-	analyzer := analyzer.NewAnalyzer()
-
 	if *historical {
-		showHistoricalSummary(tracker)
+		showHistoricalSummary()
 		return
 	}
 
-	if *performance {
-		showPerformanceMetrics(tracker)
-		return
-	}
-
-	var portfolio *models.Portfolio
-	var err error
-
+	var targetDate string
 	if *latest {
-		portfolio, err = tracker.GetLatest()
-		if err != nil {
-			log.Fatalf("Failed to get latest portfolio: %v", err)
-		}
+		targetDate = getLatestPortfolioDate()
 	} else if *date != "" {
-		targetDate, err := time.Parse("2006-01-02", *date)
-		if err != nil {
-			log.Fatalf("Invalid date format. Use YYYY-MM-DD: %v", err)
-		}
-		portfolio, err = tracker.Load(targetDate)
-		if err != nil {
-			log.Fatalf("Failed to load portfolio for date %s: %v", *date, err)
-		}
+		targetDate = *date
 	} else {
-		// Show available dates
-		dates, err := tracker.ListAll()
-		if err != nil {
-			log.Fatalf("Failed to list portfolio dates: %v", err)
-		}
-
-		if len(dates) == 0 {
-			fmt.Println("No portfolio data found. Import data using the portfolio importer first.")
-			return
-		}
-
-		fmt.Println("Available portfolio dates:")
-		for _, d := range dates {
-			fmt.Printf("  %s\n", d.Format("2006-01-02"))
-		}
-		fmt.Printf("\nUse -latest or -date YYYY-MM-DD to analyze a specific portfolio.\n")
-		return
+		targetDate = getLatestPortfolioDate()
+		*latest = true
 	}
 
-	// Display portfolio analysis
-	displayPortfolioAnalysis(portfolio, analyzer, *verbose)
+	if targetDate == "" {
+		log.Fatal("❌ No portfolio data found")
+	}
 
-	// Handle rebalancing calculation
-	if *rebalance != "" {
-		targetRatio, err := strconv.ParseFloat(*rebalance, 64)
-		if err != nil {
-			log.Fatalf("Invalid rebalance ratio: %v", err)
-		}
+	// Load portfolio data
+	portfolio, err := loadPortfolioData(targetDate)
+	if err != nil {
+		log.Fatalf("❌ Error loading portfolio data: %v", err)
+	}
 
-		fmt.Printf("\n🔄 Rebalancing Analysis (Target FBTC:MSTR = %.1f:1)\n", targetRatio)
-		fmt.Println(strings.Repeat("=", 60))
+	// Display basic portfolio analysis
+	displayPortfolioAnalysis(portfolio, *verbose)
 
-		recommendation := analyzer.CalculateRebalance(portfolio, targetRatio)
-		displayRebalanceRecommendation(recommendation)
+	// Add dynamic rebalancing analysis if requested
+	if *mnav {
+		fmt.Printf("\n")
+		performDynamicRebalancingAnalysis(portfolio, *verbose)
 	}
 }
 
-func displayPortfolioAnalysis(portfolio *models.Portfolio, analyzer *analyzer.Analyzer, verbose bool) {
-	fmt.Printf("📊 Portfolio Analysis - %s\n", portfolio.Date.Format("January 2, 2006"))
-	fmt.Println(strings.Repeat("=", 60))
-
-	fmt.Printf("💰 Total Portfolio Value: $%.2f\n", portfolio.TotalValue)
-	fmt.Printf("📈 Total Gain/Loss: $%.2f (%.2f%%)\n", portfolio.TotalGainLoss, portfolio.TotalGainLossPct)
-	fmt.Printf("₿  Bitcoin Exposure: $%.2f (%.1f%%)\n", portfolio.AssetAllocation.BitcoinExposure, portfolio.AssetAllocation.BitcoinPercent)
-	fmt.Printf("⚖️  FBTC/MSTR Ratio: %.2f:1\n", portfolio.AssetAllocation.FBTCMSTRRatio)
-
-	fmt.Printf("\n🏦 Account Breakdown:\n")
-	// Sort accounts by value
-	type accountValue struct {
-		name  string
-		value float64
-	}
-	var accounts []accountValue
-	for name, account := range portfolio.Accounts {
-		accounts = append(accounts, accountValue{name, account.TotalValue})
-	}
-	sort.Slice(accounts, func(i, j int) bool {
-		return accounts[i].value > accounts[j].value
-	})
-
-	for _, account := range accounts {
-		percentage := (account.value / portfolio.TotalValue) * 100
-		fmt.Printf("   %-25s $%10.2f (%5.1f%%)\n", account.name, account.value, percentage)
+func performDynamicRebalancingAnalysis(portfolio *models.Portfolio, verbose bool) {
+	if verbose {
+		fmt.Printf("🔄 Performing mNAV-based dynamic rebalancing analysis...\n")
 	}
 
-	fmt.Printf("\n💎 Asset Allocation:\n")
-	allocations := []struct {
-		name    string
-		value   float64
-		percent float64
-	}{
-		{"FBTC (Bitcoin ETF)", portfolio.AssetAllocation.FBTCValue, portfolio.AssetAllocation.FBTCPercent},
-		{"MSTR (MicroStrategy)", portfolio.AssetAllocation.MSTRValue, portfolio.AssetAllocation.MSTRPercent},
-		{"GLD (Gold ETF)", portfolio.AssetAllocation.GLDValue, portfolio.AssetAllocation.GLDPercent},
-		{"Other Assets", portfolio.AssetAllocation.OtherValue, portfolio.AssetAllocation.OtherPercent},
-	}
+	// Current market data - using the same values from our mNAV update
+	currentMNAV := 1.54              // From our mNAV analysis
+	currentBitcoinPrice := 106108.00 // Current Bitcoin price
 
-	for _, alloc := range allocations {
-		if alloc.value > 0 {
-			fmt.Printf("   %-20s $%10.2f (%5.1f%%)\n", alloc.name, alloc.value, alloc.percent)
+	// Calculate total FBTC and MSTR values across all accounts
+	var totalFBTCValue, totalMSTRValue float64
+	var totalFBTCShares, totalMSTRShares float64
+	var fbtcPrice, mstrPrice float64
+
+	for _, pos := range portfolio.Positions {
+		if pos.Symbol == "FBTC" {
+			totalFBTCValue += pos.CurrentValue
+			totalFBTCShares += pos.Quantity
+			fbtcPrice = pos.LastPrice // All should be the same price
+		} else if pos.Symbol == "MSTR" {
+			totalMSTRValue += pos.CurrentValue
+			totalMSTRShares += pos.Quantity
+			mstrPrice = pos.LastPrice // All should be the same price
 		}
 	}
 
-	fmt.Printf("\n📋 Top Holdings:\n")
-	symbolSummaries := analyzer.GetSymbolSummary(portfolio)
-	sort.Slice(symbolSummaries, func(i, j int) bool {
-		return symbolSummaries[i].TotalValue > symbolSummaries[j].TotalValue
-	})
+	if totalFBTCValue == 0 || totalMSTRValue == 0 {
+		fmt.Printf("⚠️  Dynamic rebalancing requires both FBTC and MSTR positions\n")
+		return
+	}
 
-	for i, summary := range symbolSummaries {
-		if i >= 5 { // Show top 5
-			break
-		}
-		fmt.Printf("   %-6s %-25s $%10.2f (%5.1f%%) [%.2f shares @ $%.2f]\n",
-			summary.Symbol,
-			truncateString(summary.Description, 25),
-			summary.TotalValue,
-			summary.PercentOfTotal,
-			summary.TotalQuantity,
-			summary.LastPrice)
+	// Create dynamic rebalancing table
+	rebalanceTable, err := analyzer.NewDynamicRebalancingTable()
+	if err != nil {
+		fmt.Printf("❌ Error loading rebalancing configuration: %v\n", err)
+		return
 	}
 
 	if verbose {
-		fmt.Printf("\n📄 All Positions:\n")
-		for _, position := range portfolio.Positions {
-			fmt.Printf("   %-6s %-20s %-25s $%8.2f [%.2f @ $%.2f]\n",
-				position.Symbol,
-				position.AccountName,
-				truncateString(position.Description, 25),
-				position.CurrentValue,
-				position.Quantity,
-				position.LastPrice)
-		}
-	}
-}
-
-func displayRebalanceRecommendation(rec *models.RebalanceRecommendation) {
-	fmt.Printf("Current FBTC:MSTR Ratio: %.2f:1\n", rec.CurrentRatio)
-	fmt.Printf("Target FBTC:MSTR Ratio:  %.2f:1\n", rec.TargetRatio)
-
-	if !rec.ReasonableRange {
-		fmt.Printf("⚠️  Warning: Rebalancing would require large trades (>10%% of portfolio)\n")
+		fmt.Printf("📋 Loaded Configuration:\n%s\n", rebalanceTable.GetConfigSummary())
 	}
 
-	if len(rec.Trades) > 0 {
-		fmt.Printf("\n💱 Recommended Trades:\n")
-		for _, trade := range rec.Trades {
-			fmt.Printf("   %s %.2f shares of %s (~$%.2f)\n",
-				trade.Action, trade.Shares, trade.Symbol, trade.EstimatedValue)
-		}
-
-		fmt.Printf("\n🎯 After Rebalancing:\n")
-		fmt.Printf("   FBTC: $%.2f (%.1f%%)\n", rec.NewAllocation.FBTCValue, rec.NewAllocation.FBTCPercent)
-		fmt.Printf("   MSTR: $%.2f (%.1f%%)\n", rec.NewAllocation.MSTRValue, rec.NewAllocation.MSTRPercent)
-		fmt.Printf("   New Ratio: %.2f:1\n", rec.NewAllocation.FBTCMSTRRatio)
-	}
-}
-
-func showHistoricalSummary(tracker *tracker.Tracker) {
-	history, err := tracker.GetHistoricalSummary()
+	// Calculate recommendation
+	recommendation, err := rebalanceTable.CalculateRebalanceRecommendation(
+		currentMNAV,
+		totalFBTCValue,
+		totalMSTRValue,
+		fbtcPrice,
+		mstrPrice,
+	)
 	if err != nil {
-		log.Fatalf("Failed to get historical summary: %v", err)
-	}
-
-	if len(history) == 0 {
-		fmt.Println("No historical data available.")
+		fmt.Printf("❌ Error calculating dynamic rebalancing: %v\n", err)
 		return
 	}
 
-	fmt.Printf("📈 Historical Portfolio Summary (%d snapshots)\n", len(history))
-	fmt.Println(strings.Repeat("=", 80))
+	// Print holdings info and recommendation
+	fmt.Printf("\n💰 Current Holdings:\n")
+	fmt.Printf("   FBTC: %.2f shares ($%.2f total)\n", totalFBTCShares, totalFBTCValue)
+	fmt.Printf("   MSTR: %.2f shares ($%.2f total)\n", totalMSTRShares, totalMSTRValue)
+	fmt.Printf("\n")
 
-	for _, snapshot := range history {
-		fmt.Printf("%s | $%10.2f | ₿ %5.1f%% | Ratio: %5.2f:1",
-			snapshot.Date.Format("2006-01-02"),
-			snapshot.TotalValue,
-			snapshot.AssetAllocation.BitcoinPercent,
-			snapshot.AssetAllocation.FBTCMSTRRatio)
+	// Print the recommendation (includes its own header)
+	recommendation.Print()
 
-		if snapshot.Changes != nil {
-			fmt.Printf(" | Δ $%+8.2f (%+5.2f%%)",
-				snapshot.Changes.ValueChange,
-				snapshot.Changes.ValueChangePercent)
+	// Add context about mNAV
+	fmt.Printf("📊 mNAV Context:\n")
+	fmt.Printf("   • Current MSTR mNAV: %.2f\n", currentMNAV)
+	fmt.Printf("   • Bitcoin Price: $%.2f\n", currentBitcoinPrice)
+	fmt.Printf("   • MSTR Premium: %.1f%% above Bitcoin NAV\n", (currentMNAV-1.0)*100)
+
+	// Calculate Bitcoin exposure through MSTR
+	mstrBitcoinHoldings := 597325.0 // From our data update
+	mstrSharesOutstanding := 256473000.0
+	mstrBitcoinPerShare := mstrBitcoinHoldings / mstrSharesOutstanding
+	yourMSTRBitcoinExposure := totalMSTRShares * mstrBitcoinPerShare
+
+	fmt.Printf("   • Your MSTR Bitcoin Exposure: %.4f BTC\n", yourMSTRBitcoinExposure)
+	fmt.Printf("   • Strategy: %s\n", getStrategyDescription(currentMNAV))
+	fmt.Printf("\n")
+}
+
+func getStrategyDescription(mnav float64) string {
+	switch {
+	case mnav < 1.5:
+		return "MSTR trading at very high premium - maximize Bitcoin allocation"
+	case mnav < 1.75:
+		return "MSTR moderately expensive - balanced Bitcoin/MSTR allocation"
+	case mnav < 2.0:
+		return "MSTR fairly valued - moderate MSTR allocation"
+	case mnav < 2.25:
+		return "MSTR getting cheaper - increase MSTR allocation"
+	default:
+		return "MSTR very cheap - maximize MSTR allocation"
+	}
+}
+
+func displayPortfolioAnalysis(portfolio *models.Portfolio, verbose bool) {
+	fmt.Printf("📊 Portfolio Analysis - %s\n", portfolio.Date.Format("January 2, 2006"))
+	fmt.Printf("============================================================\n")
+	fmt.Printf("💰 Total Portfolio Value: $%.2f\n", portfolio.TotalValue)
+	fmt.Printf("📈 Total Gain/Loss: $%.2f (%.2f%%)\n",
+		portfolio.TotalGainLoss, portfolio.TotalGainLossPct)
+
+	// Calculate Bitcoin exposure
+	bitcoinExposure := 0.0
+	fbtcValue := 0.0
+	mstrValue := 0.0
+
+	for _, pos := range portfolio.Positions {
+		if pos.Symbol == "FBTC" || pos.Symbol == "MSTR" {
+			bitcoinExposure += pos.CurrentValue
+			if pos.Symbol == "FBTC" {
+				fbtcValue += pos.CurrentValue // Sum all FBTC positions
+			} else if pos.Symbol == "MSTR" {
+				mstrValue += pos.CurrentValue // Sum all MSTR positions
+			}
 		}
-		fmt.Println()
 	}
 
-	// Show overall summary
-	first := history[0]
-	last := history[len(history)-1]
-	totalReturn := last.TotalValue - first.TotalValue
-	totalReturnPct := (totalReturn / first.TotalValue) * 100
+	bitcoinPercent := (bitcoinExposure / portfolio.TotalValue) * 100
+	fmt.Printf("₿  Bitcoin Exposure: $%.2f (%.1f%%)\n", bitcoinExposure, bitcoinPercent)
 
-	fmt.Printf("\n📊 Overall Performance:\n")
-	fmt.Printf("   Period: %s to %s\n", first.Date.Format("2006-01-02"), last.Date.Format("2006-01-02"))
-	fmt.Printf("   Total Return: $%.2f (%.2f%%)\n", totalReturn, totalReturnPct)
-	fmt.Printf("   Starting Value: $%.2f\n", first.TotalValue)
-	fmt.Printf("   Ending Value: $%.2f\n", last.TotalValue)
+	if fbtcValue > 0 && mstrValue > 0 {
+		ratio := fbtcValue / mstrValue
+		fmt.Printf("⚖️  FBTC/MSTR Ratio: %.2f:1\n", ratio)
+	}
+
+	// Account breakdown
+	fmt.Printf("\n🏦 Account Breakdown:\n")
+	for name, account := range portfolio.Accounts {
+		percent := (account.TotalValue / portfolio.TotalValue) * 100
+		fmt.Printf("   %-25s $%9.2f (%5.1f%%)\n", name, account.TotalValue, percent)
+	}
+
+	// Top holdings
+	fmt.Printf("\n💎 Asset Allocation:\n")
+
+	// Group by symbol and sum values
+	symbolTotals := make(map[string]float64)
+	symbolDescriptions := make(map[string]string)
+
+	for _, pos := range portfolio.Positions {
+		symbolTotals[pos.Symbol] += pos.CurrentValue
+		if _, exists := symbolDescriptions[pos.Symbol]; !exists {
+			symbolDescriptions[pos.Symbol] = pos.Description
+		}
+	}
+
+	// Sort by value
+	type symbolValue struct {
+		symbol      string
+		value       float64
+		description string
+	}
+
+	var sorted []symbolValue
+	for symbol, value := range symbolTotals {
+		sorted = append(sorted, symbolValue{
+			symbol:      symbol,
+			value:       value,
+			description: symbolDescriptions[symbol],
+		})
+	}
+
+	sort.Slice(sorted, func(i, j int) bool {
+		return sorted[i].value > sorted[j].value
+	})
+
+	for _, sv := range sorted {
+		if sv.value > 100 { // Only show holdings over $100
+			percent := (sv.value / portfolio.TotalValue) * 100
+
+			// Get total shares for this symbol
+			totalShares := 0.0
+			avgPrice := 0.0
+			for _, pos := range portfolio.Positions {
+				if pos.Symbol == sv.symbol {
+					totalShares += pos.Quantity
+				}
+			}
+			if totalShares > 0 {
+				avgPrice = sv.value / totalShares
+			}
+
+			description := sv.description
+			if len(description) > 25 {
+				description = description[:25] + "..."
+			}
+
+			fmt.Printf("   %-4s %-25s $%9.2f (%5.1f%%) [%.2f shares @ $%.2f]\n",
+				sv.symbol, description, sv.value, percent, totalShares, avgPrice)
+		}
+	}
+
+	if verbose {
+		fmt.Printf("\n📋 Detailed Holdings:\n")
+		for _, pos := range portfolio.Positions {
+			if pos.CurrentValue > 50 { // Show positions over $50
+				fmt.Printf("   %s: %.2f shares @ $%.2f = $%.2f\n",
+					pos.Symbol, pos.Quantity, pos.LastPrice, pos.CurrentValue)
+			}
+		}
+	}
 }
 
-func showPerformanceMetrics(tracker *tracker.Tracker) {
-	metrics, err := tracker.GetPerformanceMetrics()
+// Helper functions (simplified versions)
+func getLatestPortfolioDate() string {
+	files, err := filepath.Glob("data/portfolio/processed/portfolio_*.json")
+	if err != nil || len(files) == 0 {
+		return ""
+	}
+	sort.Strings(files)
+	latest := files[len(files)-1]
+
+	// Extract date from filename
+	base := filepath.Base(latest)
+	if len(base) >= 19 {
+		return base[10:20] // Extract YYYY-MM-DD from portfolio_YYYY-MM-DD.json
+	}
+	return ""
+}
+
+func loadPortfolioData(date string) (*models.Portfolio, error) {
+	filename := fmt.Sprintf("data/portfolio/processed/portfolio_%s.json", date)
+	data, err := os.ReadFile(filename)
 	if err != nil {
-		log.Fatalf("Failed to get performance metrics: %v", err)
+		return nil, err
 	}
 
-	fmt.Printf("📊 Portfolio Performance Metrics\n")
-	fmt.Println(strings.Repeat("=", 50))
-	fmt.Printf("Period: %s to %s\n", metrics.StartDate.Format("2006-01-02"), metrics.EndDate.Format("2006-01-02"))
-	fmt.Printf("Starting Value: $%.2f\n", metrics.StartValue)
-	fmt.Printf("Ending Value: $%.2f\n", metrics.EndValue)
-	fmt.Printf("Total Return: $%.2f (%.2f%%)\n", metrics.TotalReturn, metrics.TotalReturnPercent)
-	fmt.Printf("CAGR: %.2f%%\n", metrics.CAGR)
-	fmt.Printf("Volatility: %.2f%%\n", metrics.Volatility)
-	fmt.Printf("Max Drawdown: %.2f%%\n", metrics.MaxDrawdown)
+	var portfolio models.Portfolio
+	if err := json.Unmarshal(data, &portfolio); err != nil {
+		return nil, err
+	}
+
+	return &portfolio, nil
 }
 
-func truncateString(s string, length int) string {
-	if len(s) <= length {
-		return s
+func showHistoricalSummary() {
+	files, err := filepath.Glob("data/portfolio/processed/portfolio_*.json")
+	if err != nil || len(files) == 0 {
+		fmt.Printf("❌ No portfolio data found\n")
+		return
 	}
-	return s[:length-3] + "..."
+
+	sort.Strings(files)
+
+	fmt.Printf("📈 Historical Portfolio Summary (%d snapshots)\n", len(files))
+	fmt.Printf("================================================================================\n")
+
+	var previousValue float64
+	for i, file := range files {
+		base := filepath.Base(file)
+		if len(base) < 19 {
+			continue
+		}
+
+		date := base[10:20]
+		portfolio, err := loadPortfolioData(date)
+		if err != nil {
+			continue
+		}
+
+		// Calculate Bitcoin exposure
+		bitcoinExposure := 0.0
+		fbtcValue := 0.0
+		mstrValue := 0.0
+
+		for _, pos := range portfolio.Positions {
+			if pos.Symbol == "FBTC" || pos.Symbol == "MSTR" {
+				bitcoinExposure += pos.CurrentValue
+				if pos.Symbol == "FBTC" {
+					fbtcValue = pos.CurrentValue
+				} else if pos.Symbol == "MSTR" {
+					mstrValue = pos.CurrentValue
+				}
+			}
+		}
+
+		bitcoinPercent := (bitcoinExposure / portfolio.TotalValue) * 100
+		ratio := 0.0
+		if mstrValue > 0 {
+			ratio = fbtcValue / mstrValue
+		}
+
+		changeText := ""
+		if i > 0 && previousValue > 0 {
+			change := portfolio.TotalValue - previousValue
+			changePercent := (change / previousValue) * 100
+			if change >= 0 {
+				changeText = fmt.Sprintf(" | Δ $+%.2f (+%.2f%%)", change, changePercent)
+			} else {
+				changeText = fmt.Sprintf(" | Δ $%.2f (%.2f%%)", change, changePercent)
+			}
+		}
+
+		fmt.Printf("%s | $%9.2f | ₿ %4.1f%% | Ratio: %5.2f:1%s\n",
+			date, portfolio.TotalValue, bitcoinPercent, ratio, changeText)
+
+		previousValue = portfolio.TotalValue
+	}
+
+	if len(files) >= 2 {
+		firstPortfolio, _ := loadPortfolioData(files[0][10:20])
+		lastPortfolio, _ := loadPortfolioData(files[len(files)-1][10:20])
+
+		if firstPortfolio != nil && lastPortfolio != nil {
+			totalReturn := lastPortfolio.TotalValue - firstPortfolio.TotalValue
+			totalReturnPercent := (totalReturn / firstPortfolio.TotalValue) * 100
+
+			fmt.Printf("\n📊 Overall Performance:\n")
+			fmt.Printf("   Period: %s to %s\n",
+				firstPortfolio.Date.Format("2006-01-02"),
+				lastPortfolio.Date.Format("2006-01-02"))
+			fmt.Printf("   Total Return: $%.2f (%.2f%%)\n", totalReturn, totalReturnPercent)
+			fmt.Printf("   Starting Value: $%.2f\n", firstPortfolio.TotalValue)
+			fmt.Printf("   Ending Value: $%.2f\n", lastPortfolio.TotalValue)
+		}
+	}
 }

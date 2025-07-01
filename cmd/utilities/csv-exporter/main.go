@@ -37,6 +37,7 @@ type DailyFinancialData struct {
 	TransactionAmount         float64
 	CumulativeBitcoinInvested float64
 	AverageBitcoinCost        float64
+	MarketClosed              bool
 }
 
 // StockDataPoint represents daily stock data
@@ -486,21 +487,46 @@ func loadFromCoinMarketCapCSVFile(filename string) (*BitcoinDataResponse, error)
 
 // loadFromRecentCoinGeckoFiles loads from recent CoinGecko data files
 func loadFromRecentCoinGeckoFiles() (*BitcoinDataResponse, error) {
-	// Look for recent CoinGecko files (they have dates in the filename)
-	pattern := "data/bitcoin-prices/historical/bitcoin_historical_202*-*-*_to_202*-*-*.json"
-	files, err := filepath.Glob(pattern)
-	if err != nil || len(files) == 0 {
+	// Look for current Bitcoin data first (most recent)
+	currentFiles := []string{
+		"data/bitcoin-prices/historical/bitcoin_current_2025-06-16_7days.json",
+		"data/bitcoin-prices/historical/bitcoin_current_*_*days.json",
+	}
+
+	// Then look for historical CoinGecko files
+	patterns := []string{
+		"data/bitcoin-prices/historical/bitcoin_current_*.json",
+		"data/bitcoin-prices/historical/bitcoin_historical_202*-*-*_to_202*-*-*.json",
+	}
+
+	allFiles := make([]string, 0)
+
+	// Add current files first (they have priority)
+	for _, pattern := range currentFiles {
+		if files, err := filepath.Glob(pattern); err == nil {
+			allFiles = append(allFiles, files...)
+		}
+	}
+
+	// Add historical files
+	for _, pattern := range patterns {
+		if files, err := filepath.Glob(pattern); err == nil {
+			allFiles = append(allFiles, files...)
+		}
+	}
+
+	if len(allFiles) == 0 {
 		return nil, fmt.Errorf("no recent CoinGecko files found")
 	}
 
 	// Sort files to get the most recent ones first
-	sort.Strings(files)
+	sort.Strings(allFiles)
 
 	allPrices := make([]BitcoinDataPoint, 0)
 	loadedFiles := 0
 
 	// Load all recent files and merge their data
-	for _, file := range files {
+	for _, file := range allFiles {
 		if data, err := loadFromCoinGeckoHistoricalJSON(file); err == nil {
 			allPrices = append(allPrices, data.Prices...)
 			loadedFiles++
@@ -923,17 +949,29 @@ func fillMissingData(dailyData map[string]*DailyFinancialData, start, end time.T
 	for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
 		dateStr := d.Format("2006-01-02")
 		if record, exists := dailyData[dateStr]; exists {
+			// Check if this is a NYSE holiday/weekend
+			isHoliday := isNYSEHoliday(d)
+
 			// Handle stock price data
 			if record.StockPrice > 0 {
 				lastStockPrice = record.StockPrice
 				lastStockDate = d
+				record.MarketClosed = false
 			} else if lastStockPrice > 0 {
 				// Only forward-fill if within the acceptable time range
 				daysSinceLastStock := int(d.Sub(lastStockDate).Hours() / 24)
 				if daysSinceLastStock <= maxForwardFillDays {
 					record.StockPrice = lastStockPrice
+					if isHoliday {
+						record.MarketClosed = true // True market closure
+					} else {
+						record.MarketClosed = false // Missing data on trading day
+					}
+				} else {
+					record.MarketClosed = isHoliday // Only mark as closed if it's actually a holiday
 				}
-				// If data is too stale, leave it empty (0) to indicate missing data
+			} else {
+				record.MarketClosed = isHoliday // Only mark as closed if it's actually a holiday
 			}
 
 			// Handle Bitcoin price data
@@ -941,7 +979,6 @@ func fillMissingData(dailyData map[string]*DailyFinancialData, start, end time.T
 				lastBitcoinPrice = record.BitcoinPrice
 				lastBitcoinDate = d
 			} else if lastBitcoinPrice > 0 {
-				// Bitcoin data should be more current, so be more conservative
 				daysSinceLastBitcoin := int(d.Sub(lastBitcoinDate).Hours() / 24)
 				if daysSinceLastBitcoin <= 2 { // Only 2 days for Bitcoin
 					record.BitcoinPrice = lastBitcoinPrice
@@ -1156,6 +1193,7 @@ func exportToCSV(data []DailyFinancialData, filename string) error {
 		"Transaction_Amount_BTC",
 		"Cumulative_Investment_USD",
 		"Average_Bitcoin_Cost",
+		"Market_Closed",
 	}
 
 	if err := writer.Write(header); err != nil {
@@ -1164,6 +1202,22 @@ func exportToCSV(data []DailyFinancialData, filename string) error {
 
 	// Write data
 	for _, record := range data {
+		// Check if this is a NYSE holiday/weekend
+		isHoliday := isNYSEHoliday(record.Date)
+
+		// Determine market status
+		var marketStatus string
+		if isHoliday {
+			// It's a holiday/weekend - market was closed
+			marketStatus = "MARKET_CLOSED"
+		} else if record.StockPrice > 0 {
+			// Has stock price data on a trading day - market was open
+			marketStatus = ""
+		} else {
+			// No price on a trading day - missing data
+			marketStatus = "MISSING_DATA"
+		}
+
 		row := []string{
 			record.Date.Format("2006-01-02"),
 			formatFloat(record.StockPrice),
@@ -1183,6 +1237,7 @@ func exportToCSV(data []DailyFinancialData, filename string) error {
 			formatFloat(record.TransactionAmount),
 			formatFloat(record.CumulativeBitcoinInvested),
 			formatFloat(record.AverageBitcoinCost),
+			marketStatus,
 		}
 
 		if err := writer.Write(row); err != nil {
@@ -1304,4 +1359,91 @@ func loadFromBitcoinHistoricalJSON(filename string) (*BitcoinDataResponse, error
 	}
 
 	return bitcoinData, nil
+}
+
+// isNYSEHoliday checks if a given date is a NYSE holiday
+func isNYSEHoliday(date time.Time) bool {
+	year := date.Year()
+	month := date.Month()
+	day := date.Day()
+
+	// Weekend check
+	if date.Weekday() == time.Saturday || date.Weekday() == time.Sunday {
+		return true
+	}
+
+	// NYSE holidays for 2020-2025
+	holidays := map[string]bool{
+		// 2020
+		"2020-01-01": true, // New Year's Day
+		"2020-01-20": true, // Martin Luther King Jr. Day
+		"2020-02-17": true, // Presidents' Day
+		"2020-04-10": true, // Good Friday
+		"2020-05-25": true, // Memorial Day
+		"2020-07-03": true, // Independence Day (observed)
+		"2020-09-07": true, // Labor Day
+		"2020-11-26": true, // Thanksgiving
+		"2020-12-25": true, // Christmas
+
+		// 2021
+		"2021-01-01": true, // New Year's Day
+		"2021-01-18": true, // Martin Luther King Jr. Day
+		"2021-02-15": true, // Presidents' Day
+		"2021-04-02": true, // Good Friday
+		"2021-05-31": true, // Memorial Day
+		"2021-07-05": true, // Independence Day (observed)
+		"2021-09-06": true, // Labor Day
+		"2021-11-25": true, // Thanksgiving
+		"2021-12-24": true, // Christmas (observed)
+
+		// 2022
+		"2022-01-17": true, // Martin Luther King Jr. Day
+		"2022-02-21": true, // Presidents' Day
+		"2022-04-15": true, // Good Friday
+		"2022-05-30": true, // Memorial Day
+		"2022-06-20": true, // Juneteenth (observed)
+		"2022-07-04": true, // Independence Day
+		"2022-09-05": true, // Labor Day
+		"2022-11-24": true, // Thanksgiving
+		"2022-12-26": true, // Christmas (observed)
+
+		// 2023
+		"2023-01-02": true, // New Year's Day (observed)
+		"2023-01-16": true, // Martin Luther King Jr. Day
+		"2023-02-20": true, // Presidents' Day
+		"2023-04-07": true, // Good Friday
+		"2023-05-29": true, // Memorial Day
+		"2023-06-19": true, // Juneteenth
+		"2023-07-04": true, // Independence Day
+		"2023-09-04": true, // Labor Day
+		"2023-11-23": true, // Thanksgiving
+		"2023-12-25": true, // Christmas
+
+		// 2024
+		"2024-01-01": true, // New Year's Day
+		"2024-01-15": true, // Martin Luther King Jr. Day
+		"2024-02-19": true, // Presidents' Day
+		"2024-03-29": true, // Good Friday
+		"2024-05-27": true, // Memorial Day
+		"2024-06-19": true, // Juneteenth
+		"2024-07-04": true, // Independence Day
+		"2024-09-02": true, // Labor Day
+		"2024-11-28": true, // Thanksgiving
+		"2024-12-25": true, // Christmas
+
+		// 2025
+		"2025-01-01": true, // New Year's Day
+		"2025-01-20": true, // Martin Luther King Jr. Day
+		"2025-02-17": true, // Presidents' Day
+		"2025-04-18": true, // Good Friday
+		"2025-05-26": true, // Memorial Day
+		"2025-06-19": true, // Juneteenth
+		"2025-07-04": true, // Independence Day
+		"2025-09-01": true, // Labor Day
+		"2025-11-27": true, // Thanksgiving
+		"2025-12-25": true, // Christmas
+	}
+
+	dateStr := fmt.Sprintf("%04d-%02d-%02d", year, month, day)
+	return holidays[dateStr]
 }

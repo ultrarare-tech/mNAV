@@ -10,9 +10,9 @@ import (
 	"sort"
 	"time"
 
-	"github.com/jeffreykibler/mNAV/pkg/analysis/metrics"
 	"github.com/jeffreykibler/mNAV/pkg/collection/alphavantage"
 	"github.com/jeffreykibler/mNAV/pkg/collection/fmp"
+	"github.com/jeffreykibler/mNAV/pkg/metrics"
 	"github.com/jeffreykibler/mNAV/pkg/shared/models"
 )
 
