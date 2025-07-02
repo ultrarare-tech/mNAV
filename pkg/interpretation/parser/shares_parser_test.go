@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jeffreykibler/mNAV/pkg/shared/models"
+	"github.com/ultrarare-tech/mNAV/pkg/shared/models"
 )
 
 func TestSharesParser_ExtractFromText(t *testing.T) {

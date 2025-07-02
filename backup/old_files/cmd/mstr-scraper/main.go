@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/jeffreykibler/mNAV/pkg/scraper"
+	"github.com/ultrarare-tech/mNAV/pkg/scraper"
 )
 
 func main() {

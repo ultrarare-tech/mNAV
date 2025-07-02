@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/jeffreykibler/mNAV/pkg/shared/models"
+	"github.com/ultrarare-tech/mNAV/pkg/shared/models"
 )
 
 // TransactionStorage handles storing and retrieving Bitcoin transactions

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jeffreykibler/mNAV/pkg/portfolio/models"
+	"github.com/ultrarare-tech/mNAV/pkg/portfolio/models"
 )
 
 // Analyzer handles portfolio analysis operations

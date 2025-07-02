@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jeffreykibler/mNAV/pkg/shared/storage"
+	"github.com/ultrarare-tech/mNAV/pkg/shared/storage"
 )
 
 // MonitoringService provides monitoring and alerting for EDGAR data

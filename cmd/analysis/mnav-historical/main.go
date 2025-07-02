@@ -10,10 +10,10 @@ import (
 	"sort"
 	"time"
 
-	"github.com/jeffreykibler/mNAV/pkg/collection/alphavantage"
-	"github.com/jeffreykibler/mNAV/pkg/collection/fmp"
-	"github.com/jeffreykibler/mNAV/pkg/metrics"
-	"github.com/jeffreykibler/mNAV/pkg/shared/models"
+	"github.com/ultrarare-tech/mNAV/pkg/collection/alphavantage"
+	"github.com/ultrarare-tech/mNAV/pkg/collection/fmp"
+	"github.com/ultrarare-tech/mNAV/pkg/metrics"
+	"github.com/ultrarare-tech/mNAV/pkg/shared/models"
 )
 
 // SharesOutstanding represents shares outstanding at a point in time

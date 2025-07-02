@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/jeffreykibler/mNAV/pkg/shared/models"
+	"github.com/ultrarare-tech/mNAV/pkg/shared/models"
 )
 
 // SaylorTrackerClient mimics the comprehensive approach of SaylorTracker.com

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jeffreykibler/mNAV/pkg/collection/edgar"
+	"github.com/ultrarare-tech/mNAV/pkg/collection/edgar"
 )
 
 func main() {

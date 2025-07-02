@@ -10,7 +10,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/jeffreykibler/mNAV/pkg/portfolio/models"
+	"github.com/ultrarare-tech/mNAV/pkg/portfolio/models"
 )
 
 // Tracker handles historical portfolio data management

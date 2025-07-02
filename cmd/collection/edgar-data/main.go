@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	edgarclient "github.com/jeffreykibler/mNAV/pkg/collection/edgar"
+	edgarclient "github.com/ultrarare-tech/mNAV/pkg/collection/edgar"
 )
 
 func main() {

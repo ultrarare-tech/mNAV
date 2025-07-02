@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jeffreykibler/mNAV/pkg/interpretation/grok"
-	"github.com/jeffreykibler/mNAV/pkg/interpretation/parser"
-	"github.com/jeffreykibler/mNAV/pkg/shared/models"
+	"github.com/ultrarare-tech/mNAV/pkg/interpretation/grok"
+	"github.com/ultrarare-tech/mNAV/pkg/interpretation/parser"
+	"github.com/ultrarare-tech/mNAV/pkg/shared/models"
 )
 
 func main() {

@@ -10,7 +10,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/jeffreykibler/mNAV/pkg/collection/yahoo"
+	"github.com/ultrarare-tech/mNAV/pkg/collection/yahoo"
 )
 
 // StockDataCollection represents the stock data file format

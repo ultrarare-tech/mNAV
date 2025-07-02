@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/jeffreykibler/mNAV/pkg/collection/scraper"
-	"github.com/jeffreykibler/mNAV/pkg/shared/models"
+	"github.com/ultrarare-tech/mNAV/pkg/collection/scraper"
+	"github.com/ultrarare-tech/mNAV/pkg/shared/models"
 )
 
 func main() {

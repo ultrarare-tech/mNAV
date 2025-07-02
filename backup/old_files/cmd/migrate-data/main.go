@@ -6,7 +6,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/jeffreykibler/mNAV/pkg/edgar"
+	"github.com/ultrarare-tech/mNAV/pkg/edgar"
 )
 
 func main() {

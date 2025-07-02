@@ -1,4 +1,4 @@
-module github.com/jeffreykibler/mNAV
+module github.com/ultrarare-tech/mNAV
 
 go 1.24.0
 

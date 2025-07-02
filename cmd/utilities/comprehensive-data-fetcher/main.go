@@ -9,9 +9,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/jeffreykibler/mNAV/pkg/collection/alphavantage"
-	"github.com/jeffreykibler/mNAV/pkg/collection/external"
-	"github.com/jeffreykibler/mNAV/pkg/shared/models"
+	"github.com/ultrarare-tech/mNAV/pkg/collection/alphavantage"
+	"github.com/ultrarare-tech/mNAV/pkg/collection/external"
+	"github.com/ultrarare-tech/mNAV/pkg/shared/models"
 )
 
 func main() {

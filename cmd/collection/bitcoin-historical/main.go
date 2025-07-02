@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/jeffreykibler/mNAV/pkg/collection/coindesk"
+	"github.com/ultrarare-tech/mNAV/pkg/collection/coindesk"
 )
 
 func main() {

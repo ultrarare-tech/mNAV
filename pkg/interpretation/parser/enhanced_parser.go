@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jeffreykibler/mNAV/pkg/interpretation/grok"
-	"github.com/jeffreykibler/mNAV/pkg/shared/models"
+	"github.com/ultrarare-tech/mNAV/pkg/interpretation/grok"
+	"github.com/ultrarare-tech/mNAV/pkg/shared/models"
 )
 
 // EnhancedParser combines regex-based parsing with Grok AI for maximum accuracy

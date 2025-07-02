@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/jeffreykibler/mNAV/pkg/collection/external"
+	"github.com/ultrarare-tech/mNAV/pkg/collection/external"
 )
 
 func main() {

@@ -3,7 +3,7 @@ package analyzer
 import (
 	"fmt"
 
-	"github.com/jeffreykibler/mNAV/pkg/config"
+	"github.com/ultrarare-tech/mNAV/pkg/config"
 )
 
 // RebalancingRule represents a single row in the dynamic rebalancing table

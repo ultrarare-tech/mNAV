@@ -6,7 +6,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/jeffreykibler/mNAV/pkg/yahoo"
+	"github.com/ultrarare-tech/mNAV/pkg/yahoo"
 )
 
 func main() {

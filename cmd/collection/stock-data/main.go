@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/jeffreykibler/mNAV/pkg/collection/alphavantage"
-	"github.com/jeffreykibler/mNAV/pkg/collection/fmp"
+	"github.com/ultrarare-tech/mNAV/pkg/collection/alphavantage"
+	"github.com/ultrarare-tech/mNAV/pkg/collection/fmp"
 )
 
 // StockDataCollection represents collected stock data from multiple sources

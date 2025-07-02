@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jeffreykibler/mNAV/pkg/shared/models"
+	"github.com/ultrarare-tech/mNAV/pkg/shared/models"
 )
 
 // DailyFinancialData represents a single day's comprehensive financial data

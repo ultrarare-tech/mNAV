@@ -6,7 +6,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/jeffreykibler/mNAV/pkg/config"
+	"github.com/ultrarare-tech/mNAV/pkg/config"
 )
 
 func main() {

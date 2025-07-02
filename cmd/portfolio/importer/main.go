@@ -7,8 +7,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/jeffreykibler/mNAV/pkg/portfolio/analyzer"
-	"github.com/jeffreykibler/mNAV/pkg/portfolio/tracker"
+	"github.com/ultrarare-tech/mNAV/pkg/portfolio/analyzer"
+	"github.com/ultrarare-tech/mNAV/pkg/portfolio/tracker"
 )
 
 func main() {

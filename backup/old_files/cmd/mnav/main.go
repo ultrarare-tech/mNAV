@@ -10,13 +10,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jeffreykibler/mNAV/pkg/analysis/metrics"
-	"github.com/jeffreykibler/mNAV/pkg/collection/coinmarketcap"
-	"github.com/jeffreykibler/mNAV/pkg/collection/scraper"
-	"github.com/jeffreykibler/mNAV/pkg/collection/yahoo"
-	"github.com/jeffreykibler/mNAV/pkg/shared/config"
-	"github.com/jeffreykibler/mNAV/pkg/shared/models"
-	"github.com/jeffreykibler/mNAV/pkg/shared/utils"
+	"github.com/ultrarare-tech/mNAV/pkg/analysis/metrics"
+	"github.com/ultrarare-tech/mNAV/pkg/collection/coinmarketcap"
+	"github.com/ultrarare-tech/mNAV/pkg/collection/scraper"
+	"github.com/ultrarare-tech/mNAV/pkg/collection/yahoo"
+	"github.com/ultrarare-tech/mNAV/pkg/shared/config"
+	"github.com/ultrarare-tech/mNAV/pkg/shared/models"
+	"github.com/ultrarare-tech/mNAV/pkg/shared/utils"
 )
 
 // Delay between API calls to prevent rate limiting

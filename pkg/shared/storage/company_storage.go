@@ -8,7 +8,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/jeffreykibler/mNAV/pkg/shared/models"
+	"github.com/ultrarare-tech/mNAV/pkg/shared/models"
 )
 
 // CompanyDataStorage manages storage of company financial data

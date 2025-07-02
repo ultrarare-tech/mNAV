@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jeffreykibler/mNAV/pkg/shared/models"
+	"github.com/ultrarare-tech/mNAV/pkg/shared/models"
 	"golang.org/x/time/rate"
 
 	"compress/gzip"
