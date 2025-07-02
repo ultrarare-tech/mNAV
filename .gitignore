@@ -58,3 +58,7 @@ old_files/
 
 # Large binary files
 edgar-data
+
+*.csv
+
+*.json
