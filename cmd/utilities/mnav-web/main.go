@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -320,6 +321,105 @@ func (ws *WebServer) serveHTML(w http.ResponseWriter, r *http.Request) {
             overflow-y: auto;
         }
         
+        .upload-section {
+            padding: 30px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .upload-container {
+            max-width: 600px;
+            margin: 0 auto;
+            text-align: center;
+        }
+        
+        .upload-title {
+            font-size: 1.3em;
+            color: #2c3e50;
+            margin-bottom: 15px;
+        }
+        
+        .upload-description {
+            color: #7f8c8d;
+            margin-bottom: 20px;
+            font-size: 0.95em;
+        }
+        
+        .upload-area {
+            border: 2px dashed #bdc3c7;
+            border-radius: 10px;
+            padding: 30px;
+            background: white;
+            transition: all 0.3s ease;
+            margin-bottom: 20px;
+        }
+        
+        .upload-area:hover {
+            border-color: #3498db;
+            background: #f8fffe;
+        }
+        
+        .upload-area.dragover {
+            border-color: #27ae60;
+            background: #f0fff4;
+        }
+        
+        .file-input {
+            display: none;
+        }
+        
+        .upload-btn {
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+        }
+        
+        .upload-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(52, 152, 219, 0.4);
+        }
+        
+        .upload-btn:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .upload-status {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 5px;
+            display: none;
+        }
+        
+        .upload-status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .upload-status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .file-info {
+            margin-top: 10px;
+            padding: 10px;
+            background: #e9ecef;
+            border-radius: 5px;
+            font-size: 0.9em;
+            color: #495057;
+        }
+        
         .toggle-raw {
             background: #34495e;
             color: white;
@@ -345,6 +445,37 @@ func (ws *WebServer) serveHTML(w http.ResponseWriter, r *http.Request) {
             <div id="loading" class="loading">
                 <div class="spinner"></div>
                 <p>Fetching latest market data...</p>
+            </div>
+        </div>
+        
+        <div class="upload-section">
+            <div class="upload-container">
+                <h3 class="upload-title">📁 Upload Portfolio Holdings</h3>
+                <p class="upload-description">
+                    Upload your latest Fidelity portfolio CSV file to update portfolio analysis.
+                    The file will be saved and mNAV analysis will run automatically.
+                </p>
+                
+                <div class="upload-area" id="uploadArea" onclick="triggerFileInput()" 
+                     ondrop="handleDrop(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
+                    <div id="uploadPrompt">
+                        <p style="font-size: 1.1em; color: #2c3e50; margin-bottom: 10px;">
+                            📤 Click here or drag & drop your CSV file
+                        </p>
+                        <p style="color: #7f8c8d; font-size: 0.9em;">
+                            Supported: .csv files from Fidelity portfolio export
+                        </p>
+                    </div>
+                    <div id="fileInfo" class="file-info" style="display: none;"></div>
+                </div>
+                
+                <input type="file" id="fileInput" class="file-input" accept=".csv" onchange="handleFileSelect(event)">
+                
+                <button id="uploadBtn" class="upload-btn" onclick="uploadFile()" disabled>
+                    📤 Upload & Update mNAV
+                </button>
+                
+                <div id="uploadStatus" class="upload-status"></div>
             </div>
         </div>
         
@@ -668,6 +799,137 @@ func (ws *WebServer) serveHTML(w http.ResponseWriter, r *http.Request) {
                         '<div class="section"><h2>Loading initial data...</h2><p>Please wait while we fetch the latest mNAV information.</p></div>';
                 });
         }
+        
+        // File upload functionality
+        let selectedFile = null;
+        
+        function triggerFileInput() {
+            document.getElementById('fileInput').click();
+        }
+        
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                selectFile(file);
+            }
+        }
+        
+        function handleDrop(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            
+            const uploadArea = document.getElementById('uploadArea');
+            uploadArea.classList.remove('dragover');
+            
+            const files = event.dataTransfer.files;
+            if (files.length > 0) {
+                const file = files[0];
+                if (file.type === 'text/csv' || file.name.endsWith('.csv')) {
+                    selectFile(file);
+                } else {
+                    showUploadStatus('Please select a CSV file.', 'error');
+                }
+            }
+        }
+        
+        function handleDragOver(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            document.getElementById('uploadArea').classList.add('dragover');
+        }
+        
+        function handleDragLeave(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            document.getElementById('uploadArea').classList.remove('dragover');
+        }
+        
+        function selectFile(file) {
+            selectedFile = file;
+            
+            // Show file info
+            const fileInfo = document.getElementById('fileInfo');
+            const uploadPrompt = document.getElementById('uploadPrompt');
+            const uploadBtn = document.getElementById('uploadBtn');
+            
+            fileInfo.innerHTML = 
+                '<strong>📄 Selected File:</strong> ' + file.name + '<br>' +
+                '<strong>📏 Size:</strong> ' + (file.size / 1024).toFixed(1) + ' KB<br>' +
+                '<strong>📅 Modified:</strong> ' + new Date(file.lastModified).toLocaleDateString();
+            
+            uploadPrompt.style.display = 'none';
+            fileInfo.style.display = 'block';
+            uploadBtn.disabled = false;
+            
+            // Clear any previous status
+            hideUploadStatus();
+        }
+        
+        async function uploadFile() {
+            if (!selectedFile) {
+                showUploadStatus('Please select a file first.', 'error');
+                return;
+            }
+            
+            const uploadBtn = document.getElementById('uploadBtn');
+            const originalText = uploadBtn.textContent;
+            
+            try {
+                // Show uploading state
+                uploadBtn.disabled = true;
+                uploadBtn.textContent = 'Uploading & Updating...';
+                showUploadStatus('Uploading file and running mNAV update...', 'info');
+                
+                const formData = new FormData();
+                formData.append('portfolio', selectedFile);
+                
+                const response = await fetch('/api/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showUploadStatus('File uploaded successfully! mNAV analysis updated.', 'success');
+                    
+                    // Update the display with new data
+                    currentData = result;
+                    renderData(result);
+                    
+                    // Reset file selection
+                    resetFileSelection();
+                } else {
+                    showUploadStatus('Upload failed: ' + result.error, 'error');
+                }
+                
+            } catch (error) {
+                showUploadStatus('Upload error: ' + error.message, 'error');
+            } finally {
+                uploadBtn.disabled = false;
+                uploadBtn.textContent = originalText;
+            }
+        }
+        
+        function showUploadStatus(message, type) {
+            const status = document.getElementById('uploadStatus');
+            status.textContent = message;
+            status.className = 'upload-status ' + type;
+            status.style.display = 'block';
+        }
+        
+        function hideUploadStatus() {
+            const status = document.getElementById('uploadStatus');
+            status.style.display = 'none';
+        }
+        
+        function resetFileSelection() {
+            selectedFile = null;
+            document.getElementById('fileInput').value = '';
+            document.getElementById('uploadPrompt').style.display = 'block';
+            document.getElementById('fileInfo').style.display = 'none';
+            document.getElementById('uploadBtn').disabled = true;
+        }
     </script>
 </body>
 </html>`
@@ -719,6 +981,87 @@ func (ws *WebServer) handleData(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(data)
+}
+
+// handleUpload processes portfolio file uploads
+func (ws *WebServer) handleUpload(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Parse multipart form
+	err := r.ParseMultipartForm(10 << 20) // 10 MB max
+	if err != nil {
+		ws.sendError(w, "Failed to parse form: "+err.Error())
+		return
+	}
+
+	// Get the file from form
+	file, header, err := r.FormFile("portfolio")
+	if err != nil {
+		ws.sendError(w, "Failed to get file: "+err.Error())
+		return
+	}
+	defer file.Close()
+
+	// Validate file type
+	if !strings.HasSuffix(strings.ToLower(header.Filename), ".csv") {
+		ws.sendError(w, "Only CSV files are allowed")
+		return
+	}
+
+	// Create destination path with timestamp
+	timestamp := time.Now().Format("2006-01-02")
+	portfolioDir := filepath.Join(ws.workspaceRoot, "data", "portfolio", "raw")
+
+	// Ensure directory exists
+	err = os.MkdirAll(portfolioDir, 0755)
+	if err != nil {
+		ws.sendError(w, "Failed to create directory: "+err.Error())
+		return
+	}
+
+	// Generate filename (preserve original name with timestamp if needed)
+	var destPath string
+	if strings.Contains(header.Filename, timestamp) {
+		destPath = filepath.Join(portfolioDir, header.Filename)
+	} else {
+		// Add timestamp to filename
+		ext := filepath.Ext(header.Filename)
+		name := strings.TrimSuffix(header.Filename, ext)
+		destPath = filepath.Join(portfolioDir, fmt.Sprintf("%s_%s%s", name, timestamp, ext))
+	}
+
+	// Create destination file
+	destFile, err := os.Create(destPath)
+	if err != nil {
+		ws.sendError(w, "Failed to create destination file: "+err.Error())
+		return
+	}
+	defer destFile.Close()
+
+	// Copy uploaded file to destination
+	_, err = io.Copy(destFile, file)
+	if err != nil {
+		ws.sendError(w, "Failed to save file: "+err.Error())
+		return
+	}
+
+	log.Printf("Portfolio file uploaded: %s", destPath)
+
+	// Run mNAV update after successful upload
+	result := ws.updateCachedData()
+	if result == nil {
+		ws.sendError(w, "File uploaded but failed to update mNAV data")
+		return
+	}
+
+	// Add upload success info to result
+	result.Success = true
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
 }
 
 // parseScriptOutput extracts comprehensive data from the script output
@@ -1231,6 +1574,7 @@ func main() {
 	http.HandleFunc("/", server.serveHTML)
 	http.HandleFunc("/api/update", server.handleUpdate)
 	http.HandleFunc("/api/data", server.handleData)
+	http.HandleFunc("/api/upload", server.handleUpload)
 
 	port := ":8080"
 	fmt.Printf("🌐 mNAV Web Dashboard starting on http://localhost%s\n", port)
