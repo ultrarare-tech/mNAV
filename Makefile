@@ -31,7 +31,7 @@ interpretation-tools: bitcoin-parser
 	@echo "✅ Interpretation tools built successfully"
 
 # Build utility tools
-utility-tools: fetch-mstr-holdings comprehensive-data-fetcher csv-exporter
+utility-tools: fetch-mstr-holdings comprehensive-data-fetcher csv-exporter mnav-web
 	@echo "✅ Utility tools built successfully"
 
 # Build portfolio tools
@@ -95,6 +95,11 @@ csv-exporter:
 	@echo "🔨 Building csv-exporter..."
 	@mkdir -p bin
 	@go build -o bin/csv-exporter cmd/utilities/csv-exporter/main.go
+
+mnav-web:
+	@echo "🔨 Building mnav-web..."
+	@mkdir -p bin
+	@go build -o bin/mnav-web cmd/utilities/mnav-web/main.go
 
 # Portfolio Tools
 portfolio-importer:
@@ -196,6 +201,9 @@ demo:
 	@echo "🔍 INTERPRETATION TOOLS:"
 	@echo "   bitcoin-parser      - Extract Bitcoin transactions from filings"
 	@echo ""
+	@echo "🌐 WEB INTERFACE:"
+	@echo "   mnav-web           - Web dashboard with live updates (http://localhost:8080)"
+	@echo ""
 	@echo "🚀 WORKFLOWS:"
 	@echo "   make workflow-mstr  - Complete MSTR analysis"
 	@echo "   make workflow-portfolio - Portfolio import and analysis demo"
@@ -221,6 +229,7 @@ help:
 	@echo "   make mnav-chart        - Interactive chart generator"
 	@echo "   make bitcoin-parser    - Bitcoin transaction extractor"
 	@echo "   make csv-exporter      - Comprehensive financial data CSV exporter"
+	@echo "   make mnav-web          - Web dashboard for live mNAV tracking"
 	@echo "   make portfolio-importer - Portfolio CSV data importer"
 	@echo "   make portfolio-analyzer - Portfolio analysis and rebalancing tool"
 	@echo ""
