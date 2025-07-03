@@ -203,6 +203,7 @@ demo:
 	@echo ""
 	@echo "🌐 WEB INTERFACE:"
 	@echo "   mnav-web           - Web dashboard with live updates (http://localhost:8080)"
+	@echo "   restart-web        - Restart web server (stop, rebuild, start)"
 	@echo ""
 	@echo "🚀 WORKFLOWS:"
 	@echo "   make workflow-mstr  - Complete MSTR analysis"
@@ -263,6 +264,10 @@ help:
 # Update mNAV with formatted summary
 update-mnav:
 	@./sh/update-mnav
+
+# Restart the web server
+restart-web:
+	@./sh/restart-web
 
 # =============================================================================
 # END OF FILE

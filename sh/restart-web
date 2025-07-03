@@ -1,0 +1,35 @@
+#!/bin/bash
+
+# mNAV Web Server Restart Script
+# Stops the current web server, rebuilds it, and starts it again
+
+echo "🔄 Restarting mNAV Web Server..."
+
+# Stop any running mnav-web processes
+echo "⏹️  Stopping existing web server..."
+pkill mnav-web 2>/dev/null || echo "   (No existing server found)"
+
+# Wait a moment for processes to clean up
+sleep 1
+
+# Rebuild the web server
+echo "🔨 Rebuilding web server..."
+make mnav-web
+
+# Check if build was successful
+if [ $? -eq 0 ]; then
+    echo "✅ Build successful!"
+    echo ""
+    echo "🚀 Starting mNAV Web Server..."
+    echo "📊 Dashboard will be available at: http://localhost:8080"
+    echo ""
+    echo "💡 Tip: Press Ctrl+C to stop the server"
+    echo "📋 Or run 'pkill mnav-web' from another terminal"
+    echo ""
+    
+    # Start the web server
+    ./bin/mnav-web
+else
+    echo "❌ Build failed! Please check for errors above."
+    exit 1
+fi 
