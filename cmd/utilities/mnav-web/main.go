@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -78,6 +79,8 @@ type DataSource struct {
 // WebServer handles HTTP requests for the mNAV web interface
 type WebServer struct {
 	workspaceRoot string
+	cachedData    *ScriptOutput
+	mutex         sync.RWMutex
 }
 
 // NewWebServer creates a new web server instance
@@ -94,9 +97,15 @@ func NewWebServer() *WebServer {
 		log.Fatal("Could not find update-mnav script. Please run mnav-web from the project root directory.")
 	}
 
-	return &WebServer{
+	ws := &WebServer{
 		workspaceRoot: workspaceRoot,
 	}
+
+	// Load initial data
+	log.Println("Loading initial mNAV data...")
+	ws.updateCachedData()
+
+	return ws
 }
 
 // serveHTML serves the main HTML interface
@@ -342,9 +351,13 @@ func (ws *WebServer) serveHTML(w http.ResponseWriter, r *http.Request) {
         <div class="content">
             <div id="error-container"></div>
             <div id="data-container">
-                <p style="text-align: center; color: #7f8c8d; font-style: italic;">
-                    Click "Update Data" to fetch the latest mNAV information
-                </p>
+                <div class="section">
+                    <h2>Loading mNAV Data...</h2>
+                    <div class="loading" style="display: block;">
+                        <div class="spinner"></div>
+                        <p style="margin-top: 10px;">Fetching latest mNAV information...</p>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -632,12 +645,29 @@ func (ws *WebServer) serveHTML(w http.ResponseWriter, r *http.Request) {
             rawOutput.style.display = rawOutput.style.display === 'none' ? 'block' : 'none';
         }
         
+        // Load initial data when page loads
+        loadInitialData();
+        
         // Auto-refresh every 5 minutes
         setInterval(() => {
             if (currentData) {
                 runUpdate();
             }
         }, 5 * 60 * 1000);
+        
+        function loadInitialData() {
+            fetch('/api/data')
+                .then(response => response.json())
+                .then(data => {
+                    currentData = data;
+                    renderData(data);
+                })
+                .catch(error => {
+                    console.error('Error loading initial data:', error);
+                    document.getElementById('content').innerHTML = 
+                        '<div class="section"><h2>Loading initial data...</h2><p>Please wait while we fetch the latest mNAV information.</p></div>';
+                });
+        }
     </script>
 </body>
 </html>`
@@ -663,39 +693,32 @@ func (ws *WebServer) handleUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Change to workspace root directory
-	originalDir, err := os.Getwd()
-	if err != nil {
-		ws.sendError(w, "Could not get current directory: "+err.Error())
+	// Update cached data and return the result
+	result := ws.updateCachedData()
+	if result == nil {
+		ws.sendError(w, "Failed to update data")
 		return
-	}
-	defer os.Chdir(originalDir)
-
-	err = os.Chdir(ws.workspaceRoot)
-	if err != nil {
-		ws.sendError(w, "Could not change to workspace directory: "+err.Error())
-		return
-	}
-
-	// Run the update script
-	cmd := exec.Command("./sh/update-mnav")
-	output, err := cmd.CombinedOutput()
-
-	result := ScriptOutput{
-		Timestamp: time.Now().Format("2006-01-02 15:04:05 MST"),
-		RawOutput: string(output),
-		Success:   err == nil,
-	}
-
-	if err != nil {
-		result.Error = err.Error()
-	} else {
-		// Parse the output to extract key metrics
-		ws.parseScriptOutput(&result, string(output))
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(result)
+}
+
+// handleData serves the current cached data
+func (ws *WebServer) handleData(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	data := ws.getCachedData()
+	if data == nil {
+		ws.sendError(w, "No data available")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(data)
 }
 
 // parseScriptOutput extracts comprehensive data from the script output
@@ -1139,6 +1162,55 @@ func (ws *WebServer) extractDataSourceInfo(lines []string, startIndex int, sourc
 	return DataSource{} // Return empty if no useful data found
 }
 
+// updateCachedData runs the update script and caches the result
+func (ws *WebServer) updateCachedData() *ScriptOutput {
+	// Change to workspace root directory
+	originalDir, err := os.Getwd()
+	if err != nil {
+		log.Printf("Could not get current directory: %v", err)
+		return nil
+	}
+	defer os.Chdir(originalDir)
+
+	err = os.Chdir(ws.workspaceRoot)
+	if err != nil {
+		log.Printf("Could not change to workspace directory: %v", err)
+		return nil
+	}
+
+	// Run the update script
+	cmd := exec.Command("./sh/update-mnav")
+	output, err := cmd.CombinedOutput()
+
+	result := ScriptOutput{
+		Timestamp: time.Now().Format("2006-01-02 15:04:05 MST"),
+		RawOutput: string(output),
+		Success:   err == nil,
+	}
+
+	if err != nil {
+		result.Error = err.Error()
+		log.Printf("Update script error: %v", err)
+	} else {
+		// Parse the output to extract key metrics
+		ws.parseScriptOutput(&result, string(output))
+	}
+
+	// Cache the result
+	ws.mutex.Lock()
+	ws.cachedData = &result
+	ws.mutex.Unlock()
+
+	return &result
+}
+
+// getCachedData returns the cached data safely
+func (ws *WebServer) getCachedData() *ScriptOutput {
+	ws.mutex.RLock()
+	defer ws.mutex.RUnlock()
+	return ws.cachedData
+}
+
 // sendError sends an error response
 func (ws *WebServer) sendError(w http.ResponseWriter, message string) {
 	result := ScriptOutput{
@@ -1158,6 +1230,7 @@ func main() {
 	// Routes
 	http.HandleFunc("/", server.serveHTML)
 	http.HandleFunc("/api/update", server.handleUpdate)
+	http.HandleFunc("/api/data", server.handleData)
 
 	port := ":8080"
 	fmt.Printf("🌐 mNAV Web Dashboard starting on http://localhost%s\n", port)
