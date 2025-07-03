@@ -249,4 +249,12 @@ help:
 	@echo "📚 DOCUMENTATION:"
 	@echo "   • README.md - Main documentation"
 	@echo "   • docs/mNAV_CHARTING.md - Charting guide"
-	@echo "   • ARCHITECTURE.md - System architecture" 
+	@echo "   • ARCHITECTURE.md - System architecture"
+
+# Update mNAV with formatted summary
+update-mnav:
+	@./bin/update-mnav
+
+# =============================================================================
+# END OF FILE
+# ============================================================================= 
