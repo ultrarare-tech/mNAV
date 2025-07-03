@@ -253,7 +253,7 @@ help:
 
 # Update mNAV with formatted summary
 update-mnav:
-	@./bin/update-mnav
+	@./sh/update-mnav
 
 # =============================================================================
 # END OF FILE
