@@ -266,11 +266,155 @@ else
     echo "   ⚠️  Portfolio analysis unavailable - missing price data"
 fi
 echo ""
-echo "✅ Data Sources Working:"
-echo "   🪙 CoinGecko: ✅ Fresh Bitcoin prices (365 days)"
-echo "   📊 Historical Data: ✅ Complete MSTR transaction history"
-echo "   💹 Stock Data: ✅ Using comprehensive dataset"
-echo "   📈 Charts: ✅ Updated HTML visualization"
+echo "📡 DATA SOURCES & FRESHNESS REPORT"
+echo "=================================="
+
+# Get timestamps for data freshness reporting
+CURRENT_TIME=$(date '+%Y-%m-%d %H:%M:%S %Z')
+echo "   📅 Report Generated: $CURRENT_TIME"
+echo ""
+
+# Bitcoin Price Data
+echo "🪙 Bitcoin Price Data:"
+BITCOIN_DATA_FILE=$(ls -t data/bitcoin-prices/historical/bitcoin_current_*_*days.json 2>/dev/null | head -1)
+if [ -n "$BITCOIN_DATA_FILE" ]; then
+    BITCOIN_DATA_DATE=$(stat -f "%Sm" -t "%Y-%m-%d %H:%M:%S" "$BITCOIN_DATA_FILE" 2>/dev/null || stat -c "%y" "$BITCOIN_DATA_FILE" 2>/dev/null | cut -d' ' -f1-2)
+    echo "   📊 Source: CoinGecko API"
+    echo "   💰 Current Price: \$$BITCOIN_PRICE"
+    echo "   📅 Last Updated: $BITCOIN_DATA_DATE"
+    echo "   📁 Data File: $(basename "$BITCOIN_DATA_FILE")"
+else
+    echo "   📊 Source: CoinGecko API (fallback data)"
+    echo "   💰 Current Price: \$$BITCOIN_PRICE"
+    echo "   ⚠️  Timestamp: Unable to determine file date"
+fi
+echo ""
+
+# MSTR Stock Data
+echo "📈 MSTR Stock Data:"
+# Check both old and new stock data directories, prefer newer
+MSTR_STOCK_FILE_NEW=$(ls -t data/stock-data/MSTR_*.json 2>/dev/null | head -1)
+MSTR_STOCK_FILE_OLD=$(ls -t data/stock-prices/MSTR_*.json 2>/dev/null | head -1)
+
+# Determine which file is newer
+MSTR_STOCK_FILE=""
+MSTR_DATA_SOURCE=""
+
+if [ -n "$MSTR_STOCK_FILE_NEW" ] && [ -n "$MSTR_STOCK_FILE_OLD" ]; then
+    # Both exist, compare timestamps
+    NEW_TIMESTAMP=$(stat -f "%Y" "$MSTR_STOCK_FILE_NEW" 2>/dev/null || stat -c "%Y" "$MSTR_STOCK_FILE_NEW" 2>/dev/null)
+    OLD_TIMESTAMP=$(stat -f "%Y" "$MSTR_STOCK_FILE_OLD" 2>/dev/null || stat -c "%Y" "$MSTR_STOCK_FILE_OLD" 2>/dev/null)
+    
+    if [ "$NEW_TIMESTAMP" -gt "$OLD_TIMESTAMP" ]; then
+        MSTR_STOCK_FILE="$MSTR_STOCK_FILE_NEW"
+        MSTR_DATA_SOURCE="Financial Markets API (Enhanced Collection)"
+    else
+        MSTR_STOCK_FILE="$MSTR_STOCK_FILE_OLD"
+        MSTR_DATA_SOURCE="Financial Markets API (Legacy Collection)"
+    fi
+elif [ -n "$MSTR_STOCK_FILE_NEW" ]; then
+    MSTR_STOCK_FILE="$MSTR_STOCK_FILE_NEW"
+    MSTR_DATA_SOURCE="Financial Markets API (Enhanced Collection)"
+elif [ -n "$MSTR_STOCK_FILE_OLD" ]; then
+    MSTR_STOCK_FILE="$MSTR_STOCK_FILE_OLD"
+    MSTR_DATA_SOURCE="Financial Markets API (Legacy Collection)"
+fi
+
+if [ -n "$MSTR_STOCK_FILE" ]; then
+    MSTR_DATA_DATE=$(stat -f "%Sm" -t "%Y-%m-%d %H:%M:%S" "$MSTR_STOCK_FILE" 2>/dev/null || stat -c "%y" "$MSTR_STOCK_FILE" 2>/dev/null | cut -d' ' -f1-2)
+    echo "   📊 Source: $MSTR_DATA_SOURCE"
+    echo "   💰 Current Price: \$$STOCK_PRICE"
+    echo "   📅 Last Updated: $MSTR_DATA_DATE"
+    echo "   📁 Data File: $(basename "$MSTR_STOCK_FILE")"
+else
+    echo "   📊 Source: Financial Markets API"
+    echo "   💰 Current Price: \$$STOCK_PRICE"
+    echo "   ⚠️  Timestamp: Unable to determine file date"
+fi
+echo ""
+
+# FBTC Price Data
+echo "📊 FBTC Price Data:"
+if [ "$FBTC_PRICE" != "0" ]; then
+    echo "   📊 Source: Financial Markets API"
+    echo "   💰 Current Price: \$$FBTC_PRICE"
+    echo "   📅 Fetched: $CURRENT_TIME"
+    echo "   🔄 Collection Method: Real-time API call"
+else
+    echo "   ❌ Source: Financial Markets API"
+    echo "   💰 Current Price: Unavailable"
+    echo "   📅 Last Attempt: $CURRENT_TIME"
+    echo "   ⚠️  Status: API call failed"
+fi
+echo ""
+
+# MSTR Bitcoin Holdings Data
+echo "🪙 MSTR Bitcoin Holdings:"
+MSTR_HOLDINGS_FILE="data/analysis/MSTR_bitcoin_holdings_raw.json"
+if [ -f "$MSTR_HOLDINGS_FILE" ]; then
+    MSTR_HOLDINGS_DATE=$(stat -f "%Sm" -t "%Y-%m-%d %H:%M:%S" "$MSTR_HOLDINGS_FILE" 2>/dev/null || stat -c "%y" "$MSTR_HOLDINGS_FILE" 2>/dev/null | cut -d' ' -f1-2)
+    echo "   📊 Source: BitBo.io (SaylorTracker compatible)"
+    echo "   🪙 Total Holdings: $(printf "%'.0f" "$BITCOIN_HOLDINGS" 2>/dev/null || echo "$BITCOIN_HOLDINGS") BTC"
+    echo "   📅 Last Updated: $MSTR_HOLDINGS_DATE"
+    echo "   📁 Data File: $(basename "$MSTR_HOLDINGS_FILE")"
+    echo "   🔄 Collection Method: Web scraping"
+else
+    echo "   📊 Source: BitBo.io (SaylorTracker compatible)"
+    echo "   🪙 Total Holdings: $(printf "%'.0f" "$BITCOIN_HOLDINGS" 2>/dev/null || echo "$BITCOIN_HOLDINGS") BTC"
+    echo "   📅 Last Updated: $CURRENT_TIME"
+    echo "   🔄 Collection Method: Fallback value (597,325 BTC)"
+fi
+echo ""
+
+# Market Data Validation
+echo "🔍 Data Validation:"
+TODAY_DATE=$(date +%Y-%m-%d)
+BITCOIN_DAYS_OLD=999
+STOCK_DAYS_OLD=999
+
+if [ -n "$BITCOIN_DATA_FILE" ]; then
+    BITCOIN_FILE_DATE=$(stat -f "%Sm" -t "%Y-%m-%d" "$BITCOIN_DATA_FILE" 2>/dev/null || stat -c "%y" "$BITCOIN_DATA_FILE" 2>/dev/null | cut -d' ' -f1)
+    if [ -n "$BITCOIN_FILE_DATE" ]; then
+        BITCOIN_DAYS_OLD=$(( ( $(date -j -f "%Y-%m-%d" "$TODAY_DATE" "+%s" 2>/dev/null || date -d "$TODAY_DATE" "+%s") - $(date -j -f "%Y-%m-%d" "$BITCOIN_FILE_DATE" "+%s" 2>/dev/null || date -d "$BITCOIN_FILE_DATE" "+%s") ) / 86400 ))
+    fi
+fi
+
+# Use the same MSTR_STOCK_FILE variable that was determined above
+if [ -n "$MSTR_STOCK_FILE" ]; then
+    STOCK_FILE_DATE=$(stat -f "%Sm" -t "%Y-%m-%d" "$MSTR_STOCK_FILE" 2>/dev/null || stat -c "%y" "$MSTR_STOCK_FILE" 2>/dev/null | cut -d' ' -f1)
+    if [ -n "$STOCK_FILE_DATE" ]; then
+        STOCK_DAYS_OLD=$(( ( $(date -j -f "%Y-%m-%d" "$TODAY_DATE" "+%s" 2>/dev/null || date -d "$TODAY_DATE" "+%s") - $(date -j -f "%Y-%m-%d" "$STOCK_FILE_DATE" "+%s" 2>/dev/null || date -d "$STOCK_FILE_DATE" "+%s") ) / 86400 ))
+    fi
+fi
+
+if [ "$BITCOIN_DAYS_OLD" -le 1 ]; then
+    echo "   ✅ Bitcoin Data: Fresh (${BITCOIN_DAYS_OLD} days old)"
+elif [ "$BITCOIN_DAYS_OLD" -le 3 ]; then
+    echo "   ⚠️  Bitcoin Data: Acceptable (${BITCOIN_DAYS_OLD} days old)"
+else
+    echo "   ❌ Bitcoin Data: Stale (${BITCOIN_DAYS_OLD} days old)"
+fi
+
+if [ "$STOCK_DAYS_OLD" -le 1 ]; then
+    echo "   ✅ Stock Data: Fresh (${STOCK_DAYS_OLD} days old)"
+elif [ "$STOCK_DAYS_OLD" -le 3 ]; then
+    echo "   ⚠️  Stock Data: Acceptable (${STOCK_DAYS_OLD} days old)"
+else
+    echo "   ❌ Stock Data: Stale (${STOCK_DAYS_OLD} days old)"
+fi
+
+if [ "$FBTC_PRICE" != "0" ]; then
+    echo "   ✅ FBTC Data: Fresh (real-time)"
+else
+    echo "   ❌ FBTC Data: Unavailable"
+fi
+
+if [ -f "$MSTR_HOLDINGS_FILE" ]; then
+    echo "   ✅ MSTR Holdings: Fresh (web scraped)"
+else
+    echo "   ⚠️  MSTR Holdings: Using fallback value"
+fi
+
 echo ""
 
 echo "🪙 MSTR Holdings Update:"
