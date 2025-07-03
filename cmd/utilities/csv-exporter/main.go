@@ -851,6 +851,47 @@ type SharesOutstandingData struct {
 	} `json:"historical_data"`
 }
 
+// loadFreshHoldingsData loads the most recent Bitcoin holdings from fetch-mstr-holdings output
+func loadFreshHoldingsData() (float64, error) {
+	// Try to load from the most recent comprehensive analysis file
+	comprehensiveFile := "data/analysis/MSTR_comprehensive_bitcoin_analysis.json"
+	if _, err := os.Stat(comprehensiveFile); err == nil {
+		data, err := os.ReadFile(comprehensiveFile)
+		if err != nil {
+			return 0, err
+		}
+
+		var analysis models.ComprehensiveBitcoinAnalysis
+		if err := json.Unmarshal(data, &analysis); err != nil {
+			return 0, err
+		}
+
+		if analysis.TotalBTC > 0 {
+			return analysis.TotalBTC, nil
+		}
+	}
+
+	// Try to load from raw holdings data
+	rawHoldingsFile := "data/analysis/MSTR_bitcoin_holdings_raw.json"
+	if _, err := os.Stat(rawHoldingsFile); err == nil {
+		data, err := os.ReadFile(rawHoldingsFile)
+		if err != nil {
+			return 0, err
+		}
+
+		var rawData map[string]interface{}
+		if err := json.Unmarshal(data, &rawData); err != nil {
+			return 0, err
+		}
+
+		if totalBTC, ok := rawData["TotalBTC"].(float64); ok && totalBTC > 0 {
+			return totalBTC, nil
+		}
+	}
+
+	return 0, fmt.Errorf("no fresh holdings data found")
+}
+
 // loadSharesData loads shares outstanding data
 func loadSharesData(symbol string) (*SharesOutstandingData, error) {
 	// Look for the most recent shares data file
@@ -1039,6 +1080,15 @@ func validateDataFreshness(data []DailyFinancialData, symbol string) {
 
 // calculateBitcoinHoldings calculates Bitcoin holdings over time
 func calculateBitcoinHoldings(dailyData map[string]*DailyFinancialData, bitcoinTxData *models.ComprehensiveBitcoinAnalysis, verbose bool) {
+	// Check for fresh holdings data from recent fetch-mstr-holdings run
+	var latestHoldings float64
+	if freshHoldings, err := loadFreshHoldingsData(); err == nil && freshHoldings > 0 {
+		latestHoldings = freshHoldings
+		if verbose {
+			fmt.Printf("   🆕 Using fresh holdings data: %.0f BTC\n", latestHoldings)
+		}
+	}
+
 	// Sort transactions by date
 	sort.Slice(bitcoinTxData.AllTransactions, func(i, j int) bool {
 		return bitcoinTxData.AllTransactions[i].Date.Before(bitcoinTxData.AllTransactions[j].Date)
@@ -1072,6 +1122,21 @@ func calculateBitcoinHoldings(dailyData map[string]*DailyFinancialData, bitcoinT
 			record.TransactionAmount = tx.BTCPurchased
 			if verbose {
 				fmt.Printf("   📈 %s: +%.0f BTC (Total: %.0f BTC)\n", dateStr, tx.BTCPurchased, currentHoldings)
+			}
+		}
+
+		// For the most recent dates, use fresh holdings data if available
+		if latestHoldings > 0 {
+			recordDate, _ := time.Parse("2006-01-02", dateStr)
+			today := time.Now()
+			daysDiff := int(today.Sub(recordDate).Hours() / 24)
+
+			// Use fresh holdings for recent dates (within last 30 days)
+			if daysDiff <= 30 && latestHoldings > currentHoldings {
+				currentHoldings = latestHoldings
+				if verbose && daysDiff <= 1 {
+					fmt.Printf("   🆕 %s: Updated to fresh holdings: %.0f BTC\n", dateStr, currentHoldings)
+				}
 			}
 		}
 

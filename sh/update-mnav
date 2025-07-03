@@ -30,6 +30,14 @@ if [ "$FBTC_PRICE" = "0" ]; then
     echo "   ⚠️  Could not fetch FBTC price, ratio unavailable"
 fi
 
+# Step 1.7: Update MSTR Bitcoin holdings with latest data
+echo "🪙 Fetching latest MSTR Bitcoin holdings..."
+if ! ./bin/fetch-mstr-holdings > /dev/null 2>&1; then
+    echo "   ⚠️  Could not fetch latest MSTR holdings, using existing data"
+else
+    echo "   ✅ Updated MSTR Bitcoin holdings from latest sources"
+fi
+
 # Step 2: Generate comprehensive CSV with all data
 echo "🔄 Processing comprehensive financial data..."
 ./bin/csv-exporter -symbol=MSTR > /dev/null 2>&1
@@ -159,24 +167,7 @@ echo "   Previous mNAV: $PREV_MNAV (${PREV_PREMIUM}% premium)"
 echo "   Current mNAV: $MNAV_RATIO (${PREMIUM}% premium)"
 echo "   Trend: $TREND"
 echo ""
-echo "📊 FBTC:MSTR Ratio Analysis:"
-if [ "$FBTC_MSTR_RATIO" != "N/A" ]; then
-    echo "   FBTC Price: \$$FBTC_PRICE"
-    echo "   MSTR Price: \$$STOCK_PRICE"
-    echo "   FBTC:MSTR Ratio: $FBTC_MSTR_RATIO:1"
-    if (( $(echo "$FBTC_MSTR_RATIO < 0.25" | bc -l 2>/dev/null || echo 0) )); then
-        echo "   💡 FBTC costs ${FBTC_MSTR_RATIO}x MSTR (FBTC much cheaper)"
-    elif (( $(echo "$FBTC_MSTR_RATIO < 0.50" | bc -l 2>/dev/null || echo 0) )); then
-        echo "   💡 FBTC costs ${FBTC_MSTR_RATIO}x MSTR (FBTC significantly cheaper)"
-    elif (( $(echo "$FBTC_MSTR_RATIO < 0.75" | bc -l 2>/dev/null || echo 0) )); then
-        echo "   💡 FBTC costs ${FBTC_MSTR_RATIO}x MSTR (FBTC moderately cheaper)"
-    else
-        echo "   💡 FBTC costs ${FBTC_MSTR_RATIO}x MSTR (prices similar)"
-    fi
-else
-    echo "   ⚠️  FBTC price unavailable - ratio calculation skipped"
-fi
-echo ""
+
 echo "📊 Portfolio Rebalancing Analysis:"
 if [ "$NET_VALUE" != "N/A" ] && [ "$MNAV_RATIO" != "N/A" ]; then
     echo "   💼 Current Holdings (Updated Prices):"
@@ -281,22 +272,7 @@ echo "   📊 Historical Data: ✅ Complete MSTR transaction history"
 echo "   💹 Stock Data: ✅ Using comprehensive dataset"
 echo "   📈 Charts: ✅ Updated HTML visualization"
 echo ""
-echo "🎯 Investment Insights:"
-if [[ "$PREMIUM" != "N/A" && "$PREMIUM" != "0" ]]; then
-    if (( $(echo "$PREMIUM < 60" | bc -l 2>/dev/null || echo 0) )); then
-        echo "   📊 Reasonable Valuation:"
-        echo "   Premium under 60% suggests better value"
-    else
-        echo "   📊 Elevated Valuation:"
-        echo "   Premium over 60% suggests expensive relative to Bitcoin"
-    fi
-else
-    echo "   📊 Valuation Analysis:"
-    echo "   Premium calculation unavailable"
-fi
-echo "   mNAV analysis updated with latest market data"
-echo "   Leveraged Bitcoin exposure through MSTR holdings"
-echo ""
+
 echo "🪙 MSTR Holdings Update:"
 echo "   $(printf "%'.0f" "$BITCOIN_HOLDINGS" 2>/dev/null || echo "$BITCOIN_HOLDINGS") BTC (Total Holdings)"
 echo ""

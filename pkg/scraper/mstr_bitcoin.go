@@ -122,7 +122,7 @@ func GetMSTRBitcoinHoldings() (*MSTRHoldings, error) {
 			row.Find("td").Each(func(k int, cell *goquery.Selection) {
 				text := strings.TrimSpace(cell.Text())
 				// Look for the text format that indicates the Bitcoin amount
-				// Typical format: 576,230
+				// Typical format: 597,325
 				btcRegex := regexp.MustCompile(`^\d{3,6},\d{3}$`)
 				if btcRegex.MatchString(text) {
 					btcText := strings.ReplaceAll(text, ",", "")
@@ -297,8 +297,8 @@ func GetMSTRBitcoinHoldings() (*MSTRHoldings, error) {
 
 	// For 2025 data based on search results, hard-code the current value
 	if holdings.TotalBTC == 0 {
-		// Based on the search result content that mentioned 576,230 BTC
-		holdings.TotalBTC = 576230
+		// Based on SaylorTracker.com data as of June 30, 2025: 597,325 BTC
+		holdings.TotalBTC = 597325
 		log.Printf("Using hard-coded value for total BTC: %.0f", holdings.TotalBTC)
 	}
 
