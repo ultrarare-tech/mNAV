@@ -366,56 +366,7 @@ else
 fi
 echo ""
 
-# Market Data Validation
-echo "🔍 Data Validation:"
-TODAY_DATE=$(date +%Y-%m-%d)
-BITCOIN_DAYS_OLD=999
-STOCK_DAYS_OLD=999
 
-if [ -n "$BITCOIN_DATA_FILE" ]; then
-    BITCOIN_FILE_DATE=$(stat -f "%Sm" -t "%Y-%m-%d" "$BITCOIN_DATA_FILE" 2>/dev/null || stat -c "%y" "$BITCOIN_DATA_FILE" 2>/dev/null | cut -d' ' -f1)
-    if [ -n "$BITCOIN_FILE_DATE" ]; then
-        BITCOIN_DAYS_OLD=$(( ( $(date -j -f "%Y-%m-%d" "$TODAY_DATE" "+%s" 2>/dev/null || date -d "$TODAY_DATE" "+%s") - $(date -j -f "%Y-%m-%d" "$BITCOIN_FILE_DATE" "+%s" 2>/dev/null || date -d "$BITCOIN_FILE_DATE" "+%s") ) / 86400 ))
-    fi
-fi
-
-# Use the same MSTR_STOCK_FILE variable that was determined above
-if [ -n "$MSTR_STOCK_FILE" ]; then
-    STOCK_FILE_DATE=$(stat -f "%Sm" -t "%Y-%m-%d" "$MSTR_STOCK_FILE" 2>/dev/null || stat -c "%y" "$MSTR_STOCK_FILE" 2>/dev/null | cut -d' ' -f1)
-    if [ -n "$STOCK_FILE_DATE" ]; then
-        STOCK_DAYS_OLD=$(( ( $(date -j -f "%Y-%m-%d" "$TODAY_DATE" "+%s" 2>/dev/null || date -d "$TODAY_DATE" "+%s") - $(date -j -f "%Y-%m-%d" "$STOCK_FILE_DATE" "+%s" 2>/dev/null || date -d "$STOCK_FILE_DATE" "+%s") ) / 86400 ))
-    fi
-fi
-
-if [ "$BITCOIN_DAYS_OLD" -le 1 ]; then
-    echo "   ✅ Bitcoin Data: Fresh (${BITCOIN_DAYS_OLD} days old)"
-elif [ "$BITCOIN_DAYS_OLD" -le 3 ]; then
-    echo "   ⚠️  Bitcoin Data: Acceptable (${BITCOIN_DAYS_OLD} days old)"
-else
-    echo "   ❌ Bitcoin Data: Stale (${BITCOIN_DAYS_OLD} days old)"
-fi
-
-if [ "$STOCK_DAYS_OLD" -le 1 ]; then
-    echo "   ✅ Stock Data: Fresh (${STOCK_DAYS_OLD} days old)"
-elif [ "$STOCK_DAYS_OLD" -le 3 ]; then
-    echo "   ⚠️  Stock Data: Acceptable (${STOCK_DAYS_OLD} days old)"
-else
-    echo "   ❌ Stock Data: Stale (${STOCK_DAYS_OLD} days old)"
-fi
-
-if [ "$FBTC_PRICE" != "0" ]; then
-    echo "   ✅ FBTC Data: Fresh (real-time)"
-else
-    echo "   ❌ FBTC Data: Unavailable"
-fi
-
-if [ -f "$MSTR_HOLDINGS_FILE" ]; then
-    echo "   ✅ MSTR Holdings: Fresh (web scraped)"
-else
-    echo "   ⚠️  MSTR Holdings: Using fallback value"
-fi
-
-echo ""
 
 echo "🪙 MSTR Holdings Update:"
 echo "   $(printf "%'.0f" "$BITCOIN_HOLDINGS" 2>/dev/null || echo "$BITCOIN_HOLDINGS") BTC (Total Holdings)"
