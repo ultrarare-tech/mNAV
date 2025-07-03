@@ -567,23 +567,25 @@ func (ws *WebServer) serveHTML(w http.ResponseWriter, r *http.Request) {
                 html += '<div class="section">';
                 html += '<h2 class="section-title">📡 Data Sources & Freshness</h2>';
                 html += '<table class="data-table">';
-                html += '<thead><tr><th>Source</th><th>Provider</th><th>Price/Data</th><th>Last Updated</th><th>Method</th></tr></thead>';
+                html += '<thead><tr><th>Data Type</th><th>Source</th><th>Value</th><th>Last Updated</th><th>Method</th></tr></thead>';
                 html += '<tbody>';
                 
                 data.data_sources.forEach(source => {
-                    html += '<tr>';
-                    html += '<td><strong>' + (source.name || 'Unknown') + '</strong></td>';
-                    html += '<td>' + (source.source || 'N/A') + '</td>';
-                    
-                    let priceData = '';
-                    if (source.price) priceData = '$' + source.price;
-                    else if (source.holdings) priceData = source.holdings;
-                    else priceData = 'N/A';
-                    html += '<td>' + priceData + '</td>';
-                    
-                    html += '<td>' + (source.last_updated || 'N/A') + '</td>';
-                    html += '<td>' + (source.method || 'N/A') + '</td>';
-                    html += '</tr>';
+                    if (source.source || source.price || source.holdings) { // Only show if meaningful data
+                        html += '<tr>';
+                        html += '<td><strong>' + (source.name || 'Unknown') + '</strong></td>';
+                        html += '<td>' + (source.source || 'N/A') + '</td>';
+                        
+                        let value = '';
+                        if (source.price) value = '$' + source.price;
+                        else if (source.holdings) value = source.holdings;
+                        else value = 'N/A';
+                        html += '<td>' + value + '</td>';
+                        
+                        html += '<td>' + (source.last_updated || 'N/A') + '</td>';
+                        html += '<td>' + (source.method || 'N/A') + '</td>';
+                        html += '</tr>';
+                    }
                 });
                 
                 html += '</tbody></table>';
@@ -706,7 +708,7 @@ func (ws *WebServer) parseScriptOutput(result *ScriptOutput, output string) {
 	result.FilesUpdated = []string{}
 	result.Portfolio.Holdings = []PortfolioHolding{}
 
-	for i, line := range lines {
+	for _, line := range lines {
 		line = strings.TrimSpace(line)
 
 		// Track sections
@@ -905,13 +907,7 @@ func (ws *WebServer) parseScriptOutput(result *ScriptOutput, output string) {
 			}
 		}
 
-		// Extract Data Sources
-		if currentSection == "bitcoin-data" || currentSection == "mstr-data" || currentSection == "fbtc-data" || currentSection == "holdings-data" {
-			dataSource := ws.parseDataSource(lines, i, currentSection)
-			if dataSource.Name != "" {
-				result.DataSources = append(result.DataSources, dataSource)
-			}
-		}
+		// We'll handle data sources separately after processing all lines
 
 		// Extract Files Updated
 		if currentSection == "files" {
@@ -920,6 +916,9 @@ func (ws *WebServer) parseScriptOutput(result *ScriptOutput, output string) {
 			}
 		}
 	}
+
+	// Parse data sources more intelligently
+	ws.parseDataSources(result, output)
 }
 
 // parsePortfolioLine extracts portfolio holding data from a line
@@ -1024,6 +1023,120 @@ func (ws *WebServer) parseDataSource(lines []string, currentIndex int, sectionTy
 	}
 
 	return dataSource
+}
+
+// parseDataSources creates clean, consolidated data source entries
+func (ws *WebServer) parseDataSources(result *ScriptOutput, output string) {
+	lines := strings.Split(output, "\n")
+
+	// Find and parse each data source section
+	for i, line := range lines {
+		line = strings.TrimSpace(line)
+
+		// Bitcoin Price Data
+		if strings.Contains(line, "🪙 Bitcoin Price Data:") {
+			dataSource := ws.extractDataSourceInfo(lines, i, "Bitcoin Price")
+			if dataSource.Name != "" {
+				result.DataSources = append(result.DataSources, dataSource)
+			}
+		}
+
+		// MSTR Stock Data
+		if strings.Contains(line, "📈 MSTR Stock Data:") {
+			dataSource := ws.extractDataSourceInfo(lines, i, "MSTR Stock")
+			if dataSource.Name != "" {
+				result.DataSources = append(result.DataSources, dataSource)
+			}
+		}
+
+		// FBTC Price Data
+		if strings.Contains(line, "📊 FBTC Price Data:") {
+			dataSource := ws.extractDataSourceInfo(lines, i, "FBTC Price")
+			if dataSource.Name != "" {
+				result.DataSources = append(result.DataSources, dataSource)
+			}
+		}
+
+		// MSTR Bitcoin Holdings
+		if strings.Contains(line, "🪙 MSTR Bitcoin Holdings:") {
+			dataSource := ws.extractDataSourceInfo(lines, i, "MSTR Holdings")
+			if dataSource.Name != "" {
+				result.DataSources = append(result.DataSources, dataSource)
+			}
+		}
+	}
+}
+
+// extractDataSourceInfo extracts complete info for a single data source
+func (ws *WebServer) extractDataSourceInfo(lines []string, startIndex int, sourceName string) DataSource {
+	dataSource := DataSource{Name: sourceName}
+
+	// Look through the next several lines to find all relevant info
+	for i := startIndex; i < len(lines) && i < startIndex+10; i++ {
+		line := strings.TrimSpace(lines[i])
+
+		// Stop if we hit another section
+		if i > startIndex && (strings.Contains(line, "🪙") || strings.Contains(line, "📈") || strings.Contains(line, "📊") || strings.Contains(line, "💼") || strings.Contains(line, "📁")) {
+			break
+		}
+
+		// Extract source provider
+		if strings.Contains(line, "📊 Source:") {
+			parts := strings.Split(line, "Source:")
+			if len(parts) > 1 {
+				dataSource.Source = strings.TrimSpace(parts[1])
+			}
+		}
+
+		// Extract price
+		if strings.Contains(line, "💰 Current Price: $") {
+			parts := strings.Split(line, "$")
+			if len(parts) > 1 {
+				dataSource.Price = strings.TrimSpace(parts[1])
+			}
+		}
+
+		// Extract holdings
+		if strings.Contains(line, "🪙 Total Holdings:") {
+			parts := strings.Split(line, "Holdings:")
+			if len(parts) > 1 {
+				dataSource.Holdings = strings.TrimSpace(parts[1])
+			}
+		}
+
+		// Extract last updated time
+		if strings.Contains(line, "📅 Last Updated:") || strings.Contains(line, "📅 Fetched:") {
+			parts := strings.Split(line, ":")
+			if len(parts) > 2 {
+				// Join everything after the first colon to handle time formats
+				timeStr := strings.TrimSpace(strings.Join(parts[1:], ":"))
+				dataSource.LastUpdated = timeStr
+			}
+		}
+
+		// Extract data file
+		if strings.Contains(line, "📁 Data File:") {
+			parts := strings.Split(line, "File:")
+			if len(parts) > 1 {
+				dataSource.DataFile = strings.TrimSpace(parts[1])
+			}
+		}
+
+		// Extract collection method
+		if strings.Contains(line, "🔄 Collection Method:") {
+			parts := strings.Split(line, "Method:")
+			if len(parts) > 1 {
+				dataSource.Method = strings.TrimSpace(parts[1])
+			}
+		}
+	}
+
+	// Only return if we have meaningful data
+	if dataSource.Source != "" || dataSource.Price != "" || dataSource.Holdings != "" {
+		return dataSource
+	}
+
+	return DataSource{} // Return empty if no useful data found
 }
 
 // sendError sends an error response
