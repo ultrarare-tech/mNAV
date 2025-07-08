@@ -269,6 +269,11 @@ update-mnav:
 restart-web:
 	@./sh/restart-web
 
+# Package macOS app bundle
+package-app: mnav-web
+	@echo "📦 Creating macOS app bundle..."
+	@./package-app.sh
+
 # =============================================================================
 # END OF FILE
 # ============================================================================= 
