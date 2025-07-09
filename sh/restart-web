@@ -21,7 +21,7 @@ if [ $? -eq 0 ]; then
     echo "✅ Build successful!"
     echo ""
     echo "🚀 Starting mNAV Web Server..."
-    echo "📊 Dashboard will be available at: http://localhost:8080"
+    echo "📊 Dashboard will be available at: http://mnav.localhost:8080"
     echo ""
     echo "💡 Tip: Press Ctrl+C to stop the server"
     echo "📋 Or run 'pkill mnav-web' from another terminal"

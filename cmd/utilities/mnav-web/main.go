@@ -1570,15 +1570,30 @@ func (ws *WebServer) sendError(w http.ResponseWriter, message string) {
 func main() {
 	server := NewWebServer()
 
-	// Routes
-	http.HandleFunc("/", server.serveHTML)
-	http.HandleFunc("/api/update", server.handleUpdate)
-	http.HandleFunc("/api/data", server.handleData)
-	http.HandleFunc("/api/upload", server.handleUpload)
+	// Hostname validation middleware
+	validatedHandler := func(next http.HandlerFunc) http.HandlerFunc {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Allow requests to mnav.localhost or localhost for backward compatibility
+			host := r.Host
+			if host != "mnav.localhost:8080" && host != "localhost:8080" && host != "127.0.0.1:8080" {
+				http.Error(w, "Invalid hostname. Please access via mnav.localhost:8080", http.StatusBadRequest)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 
+	// Routes with hostname validation
+	http.HandleFunc("/", validatedHandler(server.serveHTML))
+	http.HandleFunc("/api/update", validatedHandler(server.handleUpdate))
+	http.HandleFunc("/api/data", validatedHandler(server.handleData))
+	http.HandleFunc("/api/upload", validatedHandler(server.handleUpload))
+
+	// Bind to port 8080 on all interfaces (hostname filtering handled by middleware)
 	port := ":8080"
-	fmt.Printf("🌐 mNAV Web Dashboard starting on http://localhost%s\n", port)
+	fmt.Printf("🌐 mNAV Web Dashboard starting on http://mnav.localhost%s\n", port)
 	fmt.Println("📊 Open your browser and click 'Update Data' to fetch latest mNAV information")
+	fmt.Println("💡 You can also access via http://localhost:8080 for backward compatibility")
 
 	log.Fatal(http.ListenAndServe(port, nil))
 }
