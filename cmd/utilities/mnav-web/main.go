@@ -227,8 +227,8 @@ func (ws *WebServer) serveHTML(w http.ResponseWriter, r *http.Request) {
             border-left: 4px solid #3498db;
         }
         
-        .metric-card.premium {
-            border-left-color: #e74c3c;
+        .metric-card.bitcoin-value {
+            border-left-color: #f39c12;
         }
         
         .metric-card.bitcoin {
@@ -573,12 +573,12 @@ func (ws *WebServer) serveHTML(w http.ResponseWriter, r *http.Request) {
                 html += '</div>';
             }
             
-            if (data.premium) {
-                html += '<div class="metric-card premium">';
-                html += '<div class="metric-value">' + data.premium + '</div>';
-                html += '<div class="metric-label">Premium to NAV</div>';
-                html += '</div>';
-            }
+                            if (data.bitcoin_value) {
+                    html += '<div class="metric-card bitcoin-value">';
+                    html += '<div class="metric-value">$' + data.bitcoin_value + ' billion</div>';
+                    html += '<div class="metric-label">Bitcoin Value</div>';
+                    html += '</div>';
+                }
             
             if (data.ratio) {
                 html += '<div class="metric-card">';
@@ -609,8 +609,8 @@ func (ws *WebServer) serveHTML(w http.ResponseWriter, r *http.Request) {
                 if (data.ratio) {
                     html += '<tr><td>mNAV Ratio</td><td>' + data.ratio + '</td></tr>';
                 }
-                if (data.premium) {
-                    html += '<tr><td>Premium to NAV</td><td>' + data.premium + '</td></tr>';
+                if (data.bitcoin_value) {
+                    html += '<tr><td>Bitcoin Value</td><td>$' + data.bitcoin_value + ' billion</td></tr>';
                 }
                 
                 html += '</tbody></table>';
