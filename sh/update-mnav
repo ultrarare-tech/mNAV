@@ -2,13 +2,14 @@
 
 # mNAV Update & Summary Script
 # Updates Bitcoin prices, generates comprehensive data, and displays formatted summary
+# Now using Yahoo Finance for all stock data (no API keys required!)
 
 set -e
 
 echo "🚀 Updating mNAV Data..."
 echo ""
 
-# Step 1: Update Bitcoin prices from CoinGecko
+# Step 1: Update Bitcoin prices from CoinGecko (free API)
 echo "📊 Fetching latest Bitcoin prices..."
 if ! ./bin/bitcoin-historical -start=$(date -v-1y +%Y-%m-%d) > /dev/null 2>&1; then
     echo "   ⚠️  Using existing Bitcoin historical data"
@@ -17,9 +18,9 @@ if ! ./bin/fetch-current-bitcoin > /dev/null 2>&1; then
     echo "   ⚠️  Using existing current Bitcoin data"
 fi
 
-# Step 1.5: Update MSTR stock prices  
-echo "📈 Fetching fresh MSTR stock prices..."
-if ! ./bin/update-stock-data -symbol=MSTR > /dev/null 2>&1; then
+# Step 1.5: Update MSTR stock prices using Yahoo Finance (free!)
+echo "📈 Fetching fresh MSTR stock prices from Yahoo Finance..."
+if ! ./bin/update-stock-data -symbol=MSTR -verbose > /dev/null 2>&1; then
     echo "   ⚠️  Using existing MSTR stock data"
 fi
 
@@ -292,42 +293,31 @@ echo ""
 
 # MSTR Stock Data
 echo "📈 MSTR Stock Data:"
-# Check both old and new stock data directories, prefer newer
-MSTR_STOCK_FILE_NEW=$(ls -t data/stock-data/MSTR_*.json 2>/dev/null | head -1)
-MSTR_STOCK_FILE_OLD=$(ls -t data/stock-prices/MSTR_*.json 2>/dev/null | head -1)
+# Check for Yahoo Finance data files (prioritize newer UPDATED files)
+MSTR_UPDATED_FILE=$(ls -t data/stock-data/MSTR_stock_data_UPDATED_*.json 2>/dev/null | head -1)
+MSTR_STOCK_FILE=$(ls -t data/stock-data/MSTR_stock_data_*.json 2>/dev/null | head -1)
 
-# Determine which file is newer
-MSTR_STOCK_FILE=""
-MSTR_DATA_SOURCE=""
-
-if [ -n "$MSTR_STOCK_FILE_NEW" ] && [ -n "$MSTR_STOCK_FILE_OLD" ]; then
-    # Both exist, compare timestamps
-    NEW_TIMESTAMP=$(stat -f "%Y" "$MSTR_STOCK_FILE_NEW" 2>/dev/null || stat -c "%Y" "$MSTR_STOCK_FILE_NEW" 2>/dev/null)
-    OLD_TIMESTAMP=$(stat -f "%Y" "$MSTR_STOCK_FILE_OLD" 2>/dev/null || stat -c "%Y" "$MSTR_STOCK_FILE_OLD" 2>/dev/null)
-    
-    if [ "$NEW_TIMESTAMP" -gt "$OLD_TIMESTAMP" ]; then
-        MSTR_STOCK_FILE="$MSTR_STOCK_FILE_NEW"
-        MSTR_DATA_SOURCE="Financial Markets API (Enhanced Collection)"
-    else
-        MSTR_STOCK_FILE="$MSTR_STOCK_FILE_OLD"
-        MSTR_DATA_SOURCE="Financial Markets API (Legacy Collection)"
-    fi
-elif [ -n "$MSTR_STOCK_FILE_NEW" ]; then
-    MSTR_STOCK_FILE="$MSTR_STOCK_FILE_NEW"
-    MSTR_DATA_SOURCE="Financial Markets API (Enhanced Collection)"
-elif [ -n "$MSTR_STOCK_FILE_OLD" ]; then
-    MSTR_STOCK_FILE="$MSTR_STOCK_FILE_OLD"
-    MSTR_DATA_SOURCE="Financial Markets API (Legacy Collection)"
+# Use the most recent file (prefer UPDATED files)
+if [ -n "$MSTR_UPDATED_FILE" ]; then
+    MSTR_DATA_FILE="$MSTR_UPDATED_FILE"
+    MSTR_DATA_SOURCE="Yahoo Finance (Auto-Updated)"
+elif [ -n "$MSTR_STOCK_FILE" ]; then
+    MSTR_DATA_FILE="$MSTR_STOCK_FILE"
+    MSTR_DATA_SOURCE="Yahoo Finance"
+else
+    MSTR_DATA_FILE=""
+    MSTR_DATA_SOURCE="Yahoo Finance (No data file found)"
 fi
 
-if [ -n "$MSTR_STOCK_FILE" ]; then
-    MSTR_DATA_DATE=$(stat -f "%Sm" -t "%Y-%m-%d %H:%M:%S" "$MSTR_STOCK_FILE" 2>/dev/null || stat -c "%y" "$MSTR_STOCK_FILE" 2>/dev/null | cut -d' ' -f1-2)
+if [ -n "$MSTR_DATA_FILE" ]; then
+    MSTR_DATA_DATE=$(stat -f "%Sm" -t "%Y-%m-%d %H:%M:%S" "$MSTR_DATA_FILE" 2>/dev/null || stat -c "%y" "$MSTR_DATA_FILE" 2>/dev/null | cut -d' ' -f1-2)
     echo "   📊 Source: $MSTR_DATA_SOURCE"
     echo "   💰 Current Price: \$$STOCK_PRICE"
     echo "   📅 Last Updated: $MSTR_DATA_DATE"
-    echo "   📁 Data File: $(basename "$MSTR_STOCK_FILE")"
+    echo "   📁 Data File: $(basename "$MSTR_DATA_FILE")"
+    echo "   🔄 Collection Method: Free Yahoo Finance API"
 else
-    echo "   📊 Source: Financial Markets API"
+    echo "   📊 Source: $MSTR_DATA_SOURCE"
     echo "   💰 Current Price: \$$STOCK_PRICE"
     echo "   ⚠️  Timestamp: Unable to determine file date"
 fi
@@ -336,15 +326,15 @@ echo ""
 # FBTC Price Data
 echo "📊 FBTC Price Data:"
 if [ "$FBTC_PRICE" != "0" ]; then
-    echo "   📊 Source: Financial Markets API"
+    echo "   📊 Source: Yahoo Finance"
     echo "   💰 Current Price: \$$FBTC_PRICE"
     echo "   📅 Fetched: $CURRENT_TIME"
-    echo "   🔄 Collection Method: Real-time API call"
+    echo "   🔄 Collection Method: Free Yahoo Finance API"
 else
-    echo "   ❌ Source: Financial Markets API"
+    echo "   ❌ Source: Yahoo Finance"
     echo "   💰 Current Price: Unavailable"
     echo "   📅 Last Attempt: $CURRENT_TIME"
-    echo "   ⚠️  Status: API call failed"
+    echo "   ⚠️  Status: Yahoo Finance API call failed"
 fi
 echo ""
 

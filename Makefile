@@ -19,7 +19,7 @@ all: collection-tools analysis-tools interpretation-tools utility-tools portfoli
 # =============================================================================
 
 # Build all collection tools
-collection-tools: bitcoin-historical stock-data edgar-data
+collection-tools: bitcoin-historical update-stock-data edgar-data
 	@echo "✅ Collection tools built successfully"
 
 # Build all analysis tools  
@@ -48,10 +48,10 @@ bitcoin-historical:
 	@mkdir -p bin
 	@go build -o bin/bitcoin-historical cmd/collection/bitcoin-historical/main.go
 
-stock-data:
-	@echo "🔨 Building stock-data..."
+update-stock-data:
+	@echo "🔨 Building update-stock-data (Yahoo Finance)..."
 	@mkdir -p bin
-	@go build -o bin/stock-data cmd/collection/stock-data/main.go
+	@go build -o bin/update-stock-data cmd/utilities/update-stock-data/main.go
 
 edgar-data:
 	@echo "🔨 Building edgar-data..."
@@ -156,7 +156,7 @@ workflow-mstr: all
 	@echo "Step 1: Collecting Bitcoin price history..."
 	@./bin/bitcoin-historical -start=2020-08-11 || echo "⚠️ Bitcoin price collection failed"
 	@echo "Step 2: Collecting MSTR stock data..."
-	@./bin/stock-data -symbol=MSTR -start=2020-08-11 || echo "⚠️ Stock data collection failed (check API keys)"
+	@./bin/update-stock-data -symbol=MSTR -verbose || echo "⚠️ Stock data collection failed"
 	@echo "Step 3: Calculating historical mNAV..."
 	@./bin/mnav-historical -symbol=MSTR -start=2020-08-11 || echo "⚠️ mNAV calculation failed"
 	@echo "Step 4: Generating mNAV chart..."
@@ -186,7 +186,7 @@ demo:
 	@echo ""
 	@echo "🗂️  DATA COLLECTION TOOLS:"
 	@echo "   bitcoin-historical   - Download historical Bitcoin prices"
-	@echo "   stock-data          - Collect stock prices & company data"
+	@echo "   update-stock-data   - Collect stock prices from Yahoo Finance (free!)"
 	@echo "   edgar-data          - Download SEC filings"
 	@echo ""
 	@echo "📊 ANALYSIS TOOLS:"
@@ -224,7 +224,7 @@ help:
 	@echo ""
 	@echo "🔧 INDIVIDUAL TOOLS:"
 	@echo "   make bitcoin-historical - Historical Bitcoin price collector"
-	@echo "   make stock-data        - Stock data collector (FMP + Alpha Vantage)"
+	@echo "   make update-stock-data - Stock data collector (Yahoo Finance, free!)"
 	@echo "   make edgar-data        - SEC filing downloader"
 	@echo "   make mnav-historical   - Historical mNAV calculator"
 	@echo "   make mnav-chart        - Interactive chart generator"

@@ -57,9 +57,9 @@ echo "   💰 Free API - no rate limits or subscription required!"
 ./bin/bitcoin-historical -start=2020-08-11
 echo ""
 
-# Step 2: Collect MSTR stock data (requires API keys)
-echo "📈 Step 2: Collecting MSTR stock data..."
-./bin/stock-data -symbol=MSTR -start=2020-08-11
+# Step 2: Collect MSTR stock data (using free Yahoo Finance)
+echo "📈 Step 2: Collecting MSTR stock data from Yahoo Finance..."
+./bin/update-stock-data -symbol=MSTR -verbose
 echo ""
 
 # Step 3: Calculate mNAV (requires existing Bitcoin transaction data)

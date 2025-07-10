@@ -41,7 +41,7 @@ make workflow-portfolio
 
 # OR manual workflow:
 ./bin/bitcoin-historical -start=2020-08-11      # Get Bitcoin prices (free!)
-./bin/stock-data -symbol=MSTR -start=2020-08-11  # Get stock data  
+./bin/update-stock-data -symbol=MSTR -verbose     # Get stock data (Yahoo Finance)  
 ./bin/mnav-historical -symbol=MSTR -start=2020-08-11  # Calculate mNAV
 ./bin/mnav-chart -format=html                   # Generate chart
 
@@ -135,7 +135,7 @@ Based on the latest SEC filing analysis:
 ./bin/bitcoin-historical -start=2020-08-11
 
 # Collect comprehensive stock data
-./bin/stock-data -symbol=MSTR -start=2020-08-11
+./bin/update-stock-data -symbol=MSTR -verbose
 
 # Download SEC filings
 ./bin/edgar-data -ticker=MSTR -filing-types="8-K,10-Q,10-K"

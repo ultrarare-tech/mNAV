@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ultrarare-tech/mNAV/pkg/collection/yahoo"
 	"github.com/ultrarare-tech/mNAV/pkg/shared/models"
 )
 
@@ -918,6 +919,15 @@ func loadSharesData(symbol string) (*SharesOutstandingData, error) {
 	return &sharesData, nil
 }
 
+// fetchCurrentStockPrice gets the current real-time stock price from Yahoo Finance
+func fetchCurrentStockPrice(symbol string) (float64, error) {
+	stockPrice, err := yahoo.GetStockPrice(symbol)
+	if err != nil {
+		return 0, fmt.Errorf("error fetching current stock price: %w", err)
+	}
+	return stockPrice.Price, nil
+}
+
 // generateDailyDataset creates a comprehensive daily dataset
 func generateDailyDataset(start, end time.Time, stockData *StockDataResponse, bitcoinData *BitcoinDataResponse,
 	bitcoinTxData *models.ComprehensiveBitcoinAnalysis, sharesData *SharesOutstandingData, verbose bool) []DailyFinancialData {
@@ -940,6 +950,19 @@ func generateDailyDataset(start, end time.Time, stockData *StockDataResponse, bi
 				record.StockPrice = point.Close
 				record.StockVolume = point.Volume
 			}
+		}
+	}
+
+	// Get fresh current stock price for today's date
+	today := time.Now().Format("2006-01-02")
+	if record, exists := dailyData[today]; exists && stockData != nil {
+		if currentPrice, err := fetchCurrentStockPrice(stockData.Symbol); err == nil {
+			record.StockPrice = currentPrice
+			if verbose {
+				fmt.Printf("   💰 Updated today's stock price to fresh data: $%.2f\n", currentPrice)
+			}
+		} else if verbose {
+			fmt.Printf("   ⚠️  Could not fetch current stock price: %v\n", err)
 		}
 	}
 
